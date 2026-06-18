@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { TARIFFS, STYLES, MIN_SLIDES, Tariff, StyleId } from "@/lib/tariffs";
 import { createOrder } from "@/lib/orders";
 import { createPayment } from "@/lib/yookassa";
+import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,12 +54,11 @@ export async function POST(req: Request) {
       style,
     });
 
-    const appUrl = process.env.APP_URL || "http://localhost:3000";
     const { confirmationUrl } = await createPayment({
       orderId: order.id,
       amountRub: tariff.price,
       description: `Презентация: ${topic.slice(0, 100)}`,
-      returnUrl: `${appUrl}/success?order=${order.id}`,
+      returnUrl: `${env.APP_URL}/success?order=${order.id}`,
       email,
     });
 

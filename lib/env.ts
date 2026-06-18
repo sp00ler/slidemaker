@@ -7,7 +7,8 @@ const envSchema = z.object({
   SMTP_HOST: z.string().min(1),
   SMTP_USER: z.string().min(1),
   SMTP_PASS: z.string().min(1),
-  APP_URL: z.string().min(1),
+  APP_URL: z.string().url().default("http://localhost:3000"),
+  ANTHROPIC_API_KEY: z.string().min(1),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

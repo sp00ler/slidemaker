@@ -4,6 +4,7 @@ import { OrderRow, markDone, markError } from "@/lib/orders";
 import { generateDeck } from "@/lib/anthropic";
 import { buildPptx } from "@/lib/pptx";
 import { sendDeckEmail } from "@/lib/mailer";
+import { env } from "@/lib/env";
 
 // Полный цикл: текст → JSON структура → .pptx → запись в БД → письмо.
 export async function processOrder(order: OrderRow): Promise<void> {
@@ -23,8 +24,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
 
     await markDone(order.id, fileRel);
 
-    const appUrl = process.env.APP_URL || "http://localhost:3000";
-    await sendDeckEmail(order.email, `${appUrl}${fileRel}`, deck.title);
+    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, deck.title);
   } catch (e) {
     console.error(`processOrder(${order.id}) failed:`, e);
     await markError(order.id).catch(() => {});

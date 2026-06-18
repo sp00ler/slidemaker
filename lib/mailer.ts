@@ -3,6 +3,15 @@ import { env } from "@/lib/env";
 
 let transporter: Transporter | null = null;
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function getTransporter(): Transporter {
   if (!transporter) {
     const port = Number(process.env.SMTP_PORT || 465);
@@ -25,6 +34,8 @@ export async function sendDeckEmail(
   title: string
 ): Promise<void> {
   const from = process.env.MAIL_FROM || "SlideMaker <no-reply@slidemaker.ru>";
+  const htmlTitle = escapeHtml(title);
+  const htmlDownloadUrl = escapeHtml(downloadUrl);
 
   await getTransporter().sendMail({
     from,
@@ -38,10 +49,10 @@ export async function sendDeckEmail(
     html:
       `<div style="font-family:Arial,sans-serif;font-size:15px;color:#0F172A;line-height:1.6">` +
       `<p>Здравствуйте!</p>` +
-      `<p>Ваша презентация «<b>${title}</b>» готова.</p>` +
-      `<p><a href="${downloadUrl}" style="display:inline-block;background:#2563EB;color:#fff;` +
+      `<p>Ваша презентация «<b>${htmlTitle}</b>» готова.</p>` +
+      `<p><a href="${htmlDownloadUrl}" style="display:inline-block;background:#2563EB;color:#fff;` +
       `padding:12px 22px;border-radius:8px;text-decoration:none">Скачать презентацию</a></p>` +
-      `<p style="color:#64748B;font-size:13px">${downloadUrl}</p>` +
+      `<p style="color:#64748B;font-size:13px">${htmlDownloadUrl}</p>` +
       `<p style="color:#64748B;font-size:13px">Спасибо, что воспользовались SlideMaker.</p>` +
       `</div>`,
   });

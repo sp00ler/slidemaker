@@ -127,6 +127,7 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Theme) {
     color: t.heading,
     fontFace: t.font,
     align: "left",
+    fit: "shrink",
   });
 
   const bullets = s.bullets.filter((b) => b.trim().length > 0);
@@ -143,7 +144,7 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Theme) {
           paraSpaceAfter: 10,
         },
       })),
-      { x: 0.9, y: 1.9, w: W - 1.8, h: H - 2.6, valign: "top" }
+      { x: 0.9, y: 1.9, w: W - 1.8, h: H - 2.6, valign: "top", fit: "shrink" }
     );
   }
 

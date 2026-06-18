@@ -1,0 +1,28 @@
+# dependencies
+/node_modules
+
+# next
+/.next
+/out
+
+# env (secrets!)
+.env
+.env.local
+.env*.local
+
+# generated presentations
+/public/downloads/*.pptx
+
+# os / editor
+.DS_Store
+*.log
+
+# windows
+Thumbs.db
+
+# local IDE
+.vscode/
+
+# codex/claude local configs (если не хочешь хранить в репо)
+.codex/
+.claude/

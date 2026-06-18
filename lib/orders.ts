@@ -1,0 +1,62 @@
+import { pool } from "@/lib/db";
+
+export type OrderStatus = "pending" | "generating" | "done" | "error";
+
+export interface OrderRow {
+  id: string;
+  email: string;
+  tariff: string;
+  slide_count: number;
+  topic: string;
+  style: string;
+  status: OrderStatus;
+  file_path: string | null;
+  created_at: string;
+}
+
+export async function createOrder(data: {
+  email: string;
+  tariff: string;
+  slideCount: number;
+  topic: string;
+  style: string;
+}): Promise<OrderRow> {
+  const { rows } = await pool.query<OrderRow>(
+    `INSERT INTO orders (email, tariff, slide_count, topic, style, status)
+     VALUES ($1, $2, $3, $4, $5, 'pending')
+     RETURNING *`,
+    [data.email, data.tariff, data.slideCount, data.topic, data.style]
+  );
+  return rows[0];
+}
+
+export async function getOrder(id: string): Promise<OrderRow | null> {
+  const { rows } = await pool.query<OrderRow>(
+    `SELECT * FROM orders WHERE id = $1`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+// Атомарный «захват» заказа для генерации: только один вызов получит строку
+// (защита от повторных вебхуков ЮКассы).
+export async function claimForGeneration(id: string): Promise<OrderRow | null> {
+  const { rows } = await pool.query<OrderRow>(
+    `UPDATE orders SET status = 'generating'
+     WHERE id = $1 AND status = 'pending'
+     RETURNING *`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function markDone(id: string, filePath: string): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET status = 'done', file_path = $2 WHERE id = $1`,
+    [id, filePath]
+  );
+}
+
+export async function markError(id: string): Promise<void> {
+  await pool.query(`UPDATE orders SET status = 'error' WHERE id = $1`, [id]);
+}

@@ -25,7 +25,7 @@ const TopUpSlidesSchema = z.union([
 export type Slide = z.infer<typeof SlideSchema>;
 export type Deck = z.infer<typeof DeckSchema>;
 
-function extractJson(text: string): string {
+export function extractJson(text: string): string {
   let t = text.trim();
   // убираем возможные ```json ... ``` ограждения
   if (t.startsWith("```")) {
@@ -108,7 +108,7 @@ function asConclusionSlide(slide: Slide | undefined): Slide {
   };
 }
 
-function normalizeDeck(deck: Deck, slideCount: number): Deck {
+export function normalizeDeck(deck: Deck, slideCount: number): Deck {
   const titleIndex = deck.slides.findIndex((slide) => slide.layout === "title");
   const conclusionIndexFromEnd = [...deck.slides]
     .reverse()

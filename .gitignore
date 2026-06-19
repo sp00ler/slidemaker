@@ -26,3 +26,10 @@ Thumbs.db
 # codex/claude local configs (если не хочешь хранить в репо)
 .codex/
 .claude/
+
+.env
+.env.*
+.env.local
+.env.local.*
+*.env
+*.env.*

@@ -29,6 +29,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
   const fileName = buildFileName(order.email);
   const fileRel = `/api/download/${fileName}`;
   const outPath = path.join(dir, fileName);
+  const expiresAt = new Date(Date.now() + env.DOWNLOADS_TTL_DAYS * 24 * 60 * 60 * 1000);
   let title = order.topic;
 
   try {
@@ -67,7 +68,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
   }
 
   try {
-    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, title);
+    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, title, expiresAt);
   } catch (e) {
     console.error("order email delivery failed; manual resend required:", {
       orderId: order.id,

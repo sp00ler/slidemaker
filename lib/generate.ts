@@ -1,11 +1,16 @@
 import path from "path";
 import crypto from "crypto";
 import { promises as fs } from "fs";
-import { OrderRow, markDone, markError } from "@/lib/orders";
+import { OrderRow, markAwaitingManual, markDone, markError } from "@/lib/orders";
 import { generateDeck } from "@/lib/anthropic";
 import { buildPptx } from "@/lib/pptx";
-import { sendDeckEmail } from "@/lib/mailer";
+import {
+  sendAdminOrderEmail,
+  sendAuthorCustomerEmail,
+  sendDeckEmail,
+} from "@/lib/mailer";
 import { env } from "@/lib/env";
+import { TARIFFS } from "@/lib/tariffs";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -25,6 +30,34 @@ function buildFileName(email: string): string {
 
 // Полный цикл: текст → JSON структура → .pptx → запись в БД → письмо.
 export async function processOrder(order: OrderRow): Promise<void> {
+  if (TARIFFS[order.tariff as keyof typeof TARIFFS]?.manual) {
+    await markAwaitingManual(order.id);
+
+    try {
+      await sendAuthorCustomerEmail(order.email, order.topic);
+    } catch (e) {
+      console.error("author customer email delivery failed:", {
+        orderId: order.id,
+        email: order.email,
+        error: getErrorMessage(e),
+      });
+    }
+
+    try {
+      await sendAdminOrderEmail(order);
+    } catch (e) {
+      console.error("author admin email delivery failed:", {
+        orderId: order.id,
+        email: order.email,
+        wishesLength: order.wishes?.length ?? 0,
+        storyboardLength: order.storyboard?.length ?? 0,
+        error: getErrorMessage(e),
+      });
+    }
+
+    return;
+  }
+
   const dir = path.join(process.cwd(), "public", "downloads");
   const fileName = buildFileName(order.email);
   const fileRel = `/api/download/${fileName}`;

@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from "nodemailer";
 import { env } from "@/lib/env";
+import type { OrderRow } from "@/lib/orders";
 
 let transporter: Transporter | null = null;
 
@@ -43,6 +44,75 @@ export async function sendDeckEmail(
     subject: `Ваша презентация готова: ${title}`,
     text,
     html,
+  });
+}
+
+export async function sendAuthorCustomerEmail(
+  to: string,
+  topic: string
+): Promise<void> {
+  const from = process.env.MAIL_FROM || "SlideMaker <no-reply@slidemaker.ru>";
+  const htmlTopic = escapeHtml(topic);
+  const contactEmail = "custom@slidemaker.ru";
+  const htmlContactEmail = escapeHtml(contactEmail);
+  const text =
+    `Здравствуйте!\n\n` +
+    `Оплата принята. Авторская презентация будет готова за 48 часов.\n` +
+    `Тема: ${topic}\n\n` +
+    `Пришлите файл работы (ВКР/диплом/диссертация) и пожелания на ${contactEmail}.\n\n` +
+    `Спасибо, что выбрали SlideMaker.`;
+
+  const html =
+    `<!doctype html>` +
+    `<html><body style="margin:0;padding:0;background:#F3F4F6;">` +
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F3F4F6;margin:0;padding:24px 0;">` +
+    `<tr><td align="center" style="padding:0 12px;">` +
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#FFFFFF;border-collapse:collapse;">` +
+    `<tr><td style="padding:24px 28px 12px 28px;font-family:Arial,sans-serif;color:#111827;font-size:14px;font-weight:700;">SlideMaker</td></tr>` +
+    `<tr><td style="padding:8px 28px 0 28px;font-family:Arial,sans-serif;color:#111827;">` +
+    `<div style="font-size:28px;line-height:34px;font-weight:800;">Оплата принята</div>` +
+    `</td></tr>` +
+    `<tr><td style="padding:16px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:16px;line-height:24px;">` +
+    `Авторская презентация будет готова за <strong>48 часов</strong>.` +
+    `</td></tr>` +
+    `<tr><td style="padding:18px 28px 0 28px;font-family:Arial,sans-serif;color:#111827;font-size:16px;line-height:24px;">` +
+    `<div style="font-size:13px;color:#6B7280;">Тема</div>` +
+    `<div style="font-size:18px;font-weight:700;">${htmlTopic}</div>` +
+    `</td></tr>` +
+    `<tr><td style="padding:22px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:15px;line-height:23px;">` +
+    `Пришлите файл работы (ВКР/диплом/диссертация) и пожелания на <a href="mailto:${htmlContactEmail}" style="color:#111827;text-decoration:underline;">${htmlContactEmail}</a>.` +
+    `</td></tr>` +
+    `<tr><td style="padding:24px 28px 28px 28px;font-family:Arial,sans-serif;color:#6B7280;font-size:13px;line-height:20px;border-top:1px solid #E5E7EB;">` +
+    `Спасибо, что выбрали SlideMaker.` +
+    `</td></tr>` +
+    `</table>` +
+    `</td></tr></table>` +
+    `</body></html>`;
+
+  await getTransporter().sendMail({
+    from,
+    to,
+    subject: `Оплата принята: авторская презентация «${topic}»`,
+    text,
+    html,
+  });
+}
+
+export async function sendAdminOrderEmail(order: OrderRow): Promise<void> {
+  const from = process.env.MAIL_FROM || "SlideMaker <no-reply@slidemaker.ru>";
+  await getTransporter().sendMail({
+    from,
+    to: env.ADMIN_EMAIL,
+    subject: `Авторский заказ ${order.id}`,
+    text:
+      `Новый авторский заказ\n\n` +
+      `Order ID: ${order.id}\n` +
+      `Email: ${order.email}\n` +
+      `Tariff: ${order.tariff}\n` +
+      `Topic: ${order.topic}\n` +
+      `Wishes:\n${order.wishes ?? ""}\n\n` +
+      `Storyboard:\n${order.storyboard ?? ""}\n\n` +
+      `Created at: ${order.created_at}`,
   });
 }
 

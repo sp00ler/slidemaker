@@ -47,24 +47,31 @@ export async function POST(req: Request) {
     if (storyboardResult.error) {
       return NextResponse.json({ error: storyboardResult.error }, { status: 400 });
     }
+    if (tariff.manual && !wishesResult.value) {
+      return NextResponse.json(
+        { error: "Опишите задачу для авторской презентации" },
+        { status: 400 }
+      );
+    }
     if (!STYLES[style]) {
       return NextResponse.json({ error: "Неверный стиль" }, { status: 400 });
     }
-    if (
+    if (!tariff.manual && (
       !Number.isInteger(slideCount) ||
       slideCount < MIN_SLIDES ||
       slideCount > tariff.maxSlides
-    ) {
+    )) {
       return NextResponse.json(
         { error: `Количество слайдов: от ${MIN_SLIDES} до ${tariff.maxSlides}` },
         { status: 400 }
       );
     }
+    const orderSlideCount = tariff.manual ? 0 : slideCount;
 
     const order = await createOrder({
       email,
       tariff: tariffId,
-      slideCount,
+      slideCount: orderSlideCount,
       topic,
       wishes: wishesResult.value,
       storyboard: storyboardResult.value,

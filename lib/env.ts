@@ -8,6 +8,7 @@ const envSchema = z.object({
   SMTP_USER: z.string().min(1),
   SMTP_PASS: z.string().min(1),
   APP_URL: z.string().url().default("http://localhost:3000"),
+  ADMIN_EMAIL: z.string().email().default("custom@slidemaker.ru"),
   DOWNLOADS_TTL_DAYS: z.coerce.number().nonnegative().default(7),
   ANTHROPIC_API_KEY: z.string().min(1),
 });

@@ -1,6 +1,11 @@
 import { pool } from "@/lib/db";
 
-export type OrderStatus = "pending" | "generating" | "done" | "error";
+export type OrderStatus =
+  | "pending"
+  | "generating"
+  | "awaiting_manual"
+  | "done"
+  | "error";
 
 export interface OrderRow {
   id: string;
@@ -67,6 +72,10 @@ export async function markDone(id: string, filePath: string): Promise<void> {
     `UPDATE orders SET status = 'done', file_path = $2 WHERE id = $1`,
     [id, filePath]
   );
+}
+
+export async function markAwaitingManual(id: string): Promise<void> {
+  await pool.query(`UPDATE orders SET status = 'awaiting_manual' WHERE id = $1`, [id]);
 }
 
 export async function markError(id: string): Promise<void> {

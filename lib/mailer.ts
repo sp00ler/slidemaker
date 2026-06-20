@@ -53,7 +53,7 @@ export function formatExpiresAt(expiresAt: Date): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: "Europe/Moscow",
     timeZoneName: "short",
   }).format(expiresAt);
 }

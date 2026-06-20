@@ -13,7 +13,7 @@ function getErrorMessage(error: unknown): string {
 // Полный цикл: текст → JSON структура → .pptx → запись в БД → письмо.
 export async function processOrder(order: OrderRow): Promise<void> {
   const dir = path.join(process.cwd(), "public", "downloads");
-  const fileRel = `/downloads/${order.id}.pptx`;
+  const fileRel = `/api/download/${order.id}.pptx`;
   const outPath = path.join(dir, `${order.id}.pptx`);
   let title = order.topic;
 

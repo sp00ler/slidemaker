@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS orders (
   tariff      text        NOT NULL,                 -- 'basic' | 'standard'
   slide_count int         NOT NULL,
   topic       text        NOT NULL,
+  wishes      text,
+  storyboard  text,
   style       text        NOT NULL,                 -- 'business' | 'creative' | 'minimal'
   status      text        NOT NULL DEFAULT 'pending', -- pending | generating | done | error
   file_path   text,

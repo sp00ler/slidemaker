@@ -3,11 +3,14 @@ import { TARIFFS, STYLES, MIN_SLIDES, Tariff, StyleId } from "@/lib/tariffs";
 import { createOrder } from "@/lib/orders";
 import { createPayment } from "@/lib/yookassa";
 import { env } from "@/lib/env";
+import { parseOptionalText } from "@/lib/checkout-validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const MAX_WISHES_LENGTH = 500;
+const MAX_STORYBOARD_LENGTH = 1000;
 
 export async function POST(req: Request) {
   try {
@@ -18,6 +21,12 @@ export async function POST(req: Request) {
     const style = String(body.style || "") as StyleId;
     const topic = String(body.topic || "").trim();
     const slideCount = Number(body.slideCount);
+    const wishesResult = parseOptionalText(body.wishes, MAX_WISHES_LENGTH, "Пожелания");
+    const storyboardResult = parseOptionalText(
+      body.storyboard,
+      MAX_STORYBOARD_LENGTH,
+      "Сториборд"
+    );
 
     const tariff = TARIFFS[tariffId];
     if (!tariff) {
@@ -31,6 +40,12 @@ export async function POST(req: Request) {
         { error: "Тема должна быть от 3 до 300 символов" },
         { status: 400 }
       );
+    }
+    if (wishesResult.error) {
+      return NextResponse.json({ error: wishesResult.error }, { status: 400 });
+    }
+    if (storyboardResult.error) {
+      return NextResponse.json({ error: storyboardResult.error }, { status: 400 });
     }
     if (!STYLES[style]) {
       return NextResponse.json({ error: "Неверный стиль" }, { status: 400 });
@@ -51,6 +66,8 @@ export async function POST(req: Request) {
       tariff: tariffId,
       slideCount,
       topic,
+      wishes: wishesResult.value,
+      storyboard: storyboardResult.value,
       style,
     });
 

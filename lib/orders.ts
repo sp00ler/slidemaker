@@ -8,6 +8,8 @@ export interface OrderRow {
   tariff: string;
   slide_count: number;
   topic: string;
+  wishes: string | null;
+  storyboard: string | null;
   style: string;
   status: OrderStatus;
   file_path: string | null;
@@ -19,13 +21,23 @@ export async function createOrder(data: {
   tariff: string;
   slideCount: number;
   topic: string;
+  wishes: string | null;
+  storyboard: string | null;
   style: string;
 }): Promise<OrderRow> {
   const { rows } = await pool.query<OrderRow>(
-    `INSERT INTO orders (email, tariff, slide_count, topic, style, status)
-     VALUES ($1, $2, $3, $4, $5, 'pending')
+    `INSERT INTO orders (email, tariff, slide_count, topic, wishes, storyboard, style, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
      RETURNING *`,
-    [data.email, data.tariff, data.slideCount, data.topic, data.style]
+    [
+      data.email,
+      data.tariff,
+      data.slideCount,
+      data.topic,
+      data.wishes,
+      data.storyboard,
+      data.style,
+    ]
   );
   return rows[0];
 }

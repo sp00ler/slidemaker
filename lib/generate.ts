@@ -1,4 +1,5 @@
 import path from "path";
+import crypto from "crypto";
 import { promises as fs } from "fs";
 import { OrderRow, markDone, markError } from "@/lib/orders";
 import { generateDeck } from "@/lib/anthropic";
@@ -10,11 +11,24 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function buildFileName(email: string): string {
+  const safeEmail = email
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const iso = new Date().toISOString();
+  const ts =
+    iso.slice(0, 10).replace(/-/g, "") + "-" + iso.slice(11, 19).replace(/:/g, "");
+  const token = "sm_69" + crypto.randomBytes(4).toString("hex");
+  return `${safeEmail}-${ts}-${token}.pptx`;
+}
+
 // Полный цикл: текст → JSON структура → .pptx → запись в БД → письмо.
 export async function processOrder(order: OrderRow): Promise<void> {
   const dir = path.join(process.cwd(), "public", "downloads");
-  const fileRel = `/api/download/${order.id}.pptx`;
-  const outPath = path.join(dir, `${order.id}.pptx`);
+  const fileName = buildFileName(order.email);
+  const fileRel = `/api/download/${fileName}`;
+  const outPath = path.join(dir, fileName);
   let title = order.topic;
 
   try {

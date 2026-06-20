@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SAFE_NAME = /^[a-f0-9-]+\.pptx$/i;
+const SAFE_NAME = /^[a-z0-9_-]+\.pptx$/i;
 const DOWNLOADS_DIR = path.join(process.cwd(), "public", "downloads");
 
 export async function GET(

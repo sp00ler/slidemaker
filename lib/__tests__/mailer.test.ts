@@ -113,10 +113,10 @@ test("sendDeckEmail renders download href and expiry date", async () => {
     const mail = sent as MailOptions;
     assert.match(mail.html, /<table role="presentation"/);
     assert.match(mail.html, /<v:roundrect/);
-    assert.match(mail.html, new RegExp(`href="${downloadUrl}"`));
-    assert.match(mail.text, new RegExp(downloadUrl));
-    assert.match(mail.html, new RegExp(expiresText));
-    assert.match(mail.text, new RegExp(expiresText));
+    assert.ok(mail.html.includes(`href="${downloadUrl}"`));
+    assert.ok(mail.text.includes(downloadUrl));
+    assert.ok(mail.html.includes(expiresText));
+    assert.ok(mail.text.includes(expiresText));
     assert.match(mail.text, /1 неделя/);
   } finally {
     nodemailer.createTransport = originalCreateTransport;

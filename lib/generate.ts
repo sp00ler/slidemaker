@@ -72,6 +72,8 @@ export async function processOrder(order: OrderRow): Promise<void> {
           topic: order.topic,
           style: order.style,
           slideCount: order.slide_count,
+          wishes: order.wishes,
+          storyboard: order.storyboard,
         });
         title = deck.title;
 

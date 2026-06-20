@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { TARIFFS, STYLES, MIN_SLIDES, Tariff, StyleId } from "@/lib/tariffs";
-import { createOrder } from "@/lib/orders";
+import { bindUploadFilesToOrder, createOrder } from "@/lib/orders";
 import { createPayment } from "@/lib/yookassa";
 import { env } from "@/lib/env";
 import { parseOptionalText } from "@/lib/checkout-validation";
+import { isUuid } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
     const style = String(body.style || "") as StyleId;
     const topic = String(body.topic || "").trim();
     const slideCount = Number(body.slideCount);
+    const uploadToken = String(body.uploadToken || "").trim();
     const wishesResult = parseOptionalText(body.wishes, MAX_WISHES_LENGTH, "Пожелания");
     const storyboardResult = parseOptionalText(
       body.storyboard,
@@ -53,6 +55,9 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    if (uploadToken && !isUuid(uploadToken)) {
+      return NextResponse.json({ error: "Некорректный uploadToken" }, { status: 400 });
+    }
     if (!STYLES[style]) {
       return NextResponse.json({ error: "Неверный стиль" }, { status: 400 });
     }
@@ -77,6 +82,10 @@ export async function POST(req: Request) {
       storyboard: storyboardResult.value,
       style,
     });
+
+    if (uploadToken) {
+      await bindUploadFilesToOrder(order.id, uploadToken);
+    }
 
     const { confirmationUrl } = await createPayment({
       orderId: order.id,

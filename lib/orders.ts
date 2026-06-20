@@ -81,3 +81,14 @@ export async function markAwaitingManual(id: string): Promise<void> {
 export async function markError(id: string): Promise<void> {
   await pool.query(`UPDATE orders SET status = 'error' WHERE id = $1`, [id]);
 }
+
+export async function bindUploadFilesToOrder(
+  orderId: string,
+  uploadToken: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE order_files SET order_id = $1
+     WHERE upload_token = $2 AND order_id IS NULL`,
+    [orderId, uploadToken]
+  );
+}

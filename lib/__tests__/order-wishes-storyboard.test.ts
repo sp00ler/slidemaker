@@ -138,18 +138,26 @@ async function loadCheckout(): Promise<CheckoutModule> {
 
 async function loadCheckoutRoute(): Promise<{
   mod: CheckoutRouteModule;
-  calls: { createOrder: unknown[]; createPayment: unknown[] };
+  calls: { createOrder: unknown[]; createPayment: unknown[]; bindUploads: unknown[] };
 }> {
-  const calls = { createOrder: [] as unknown[], createPayment: [] as unknown[] };
+  const calls = {
+    createOrder: [] as unknown[],
+    createPayment: [] as unknown[],
+    bindUploads: [] as unknown[],
+  };
   const ordersPath = path.join(runtimeOutDir, "lib", "orders.js");
   const yookassaPath = path.join(runtimeOutDir, "lib", "yookassa.js");
   const envPath = path.join(runtimeOutDir, "lib", "env.js");
+  const uploadsPath = path.join(runtimeOutDir, "lib", "uploads.js");
   await fs.mkdir(path.join(runtimeOutDir, "lib"), { recursive: true });
   await fs.writeFile(
     ordersPath,
     `exports.createOrder = async (data) => {
       global.__checkoutCalls.createOrder.push(data);
       return { id: "order-id" };
+    };
+    exports.bindUploadFilesToOrder = async (...args) => {
+      global.__checkoutCalls.bindUploads.push(args);
     };`
   );
   await fs.writeFile(
@@ -163,9 +171,14 @@ async function loadCheckoutRoute(): Promise<{
     envPath,
     `exports.env = { APP_URL: "https://slidemaker.ru" };`
   );
+  await fs.writeFile(
+    uploadsPath,
+    `exports.isUuid = (value) => /^[0-9a-f-]{36}$/i.test(value);`
+  );
   delete require.cache[ordersPath];
   delete require.cache[yookassaPath];
   delete require.cache[envPath];
+  delete require.cache[uploadsPath];
   (globalThis as unknown as { __checkoutCalls: typeof calls }).__checkoutCalls = calls;
 
   await transpileSource(
@@ -327,6 +340,29 @@ test("checkout author rejects empty wishes", async () => {
 
   assert.equal(res.status, 400);
   assert.equal(body.error, "Опишите задачу для авторской презентации");
+});
+
+test("checkout binds uploaded files after order creation", async () => {
+  const { mod, calls } = await loadCheckoutRoute();
+
+  const res = await mod.POST(
+    new Request("https://slidemaker.test/api/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "user@example.com",
+        tariff: "basic",
+        style: "minimal",
+        topic: "Topic",
+        slideCount: 5,
+        uploadToken: "11111111-1111-4111-8111-111111111111",
+      }),
+    })
+  );
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(calls.bindUploads, [
+    ["order-id", "11111111-1111-4111-8111-111111111111"],
+  ]);
 });
 
 test("processOrder author skips generation and sends manual emails", async () => {

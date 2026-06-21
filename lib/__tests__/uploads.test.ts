@@ -28,7 +28,8 @@ type OrdersModule = {
 };
 
 const testOutDir = path.join(process.cwd(), ".test-dist");
-const runtimeOutDir = path.join(testOutDir, "runtime");
+const runtimeBaseDir = path.join(testOutDir, "runtime");
+let activeRuntimeDir = runtimeBaseDir;
 const requireFromTest = createRequire(__filename);
 const moduleWithResolver = Module as typeof Module & {
   _resolveFilename: (
@@ -50,7 +51,7 @@ moduleWithResolver._resolveFilename = function (
   if (request.startsWith("@/")) {
     return originalResolveFilename.call(
       this,
-      path.join(runtimeOutDir, request.slice(2)),
+      path.join(activeRuntimeDir, request.slice(2)),
       parent,
       isMain,
       options
@@ -76,8 +77,8 @@ async function transpileSource(srcPath: string, outPath: string): Promise<void> 
 
 async function writeDbStub(count: number): Promise<unknown[][]> {
   const calls: unknown[][] = [];
-  await fs.mkdir(path.join(runtimeOutDir, "lib"), { recursive: true });
-  const dbPath = path.join(runtimeOutDir, "lib", "db.js");
+  await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
+  const dbPath = path.join(activeRuntimeDir, "lib", "db.js");
   await fs.writeFile(
     dbPath,
     `exports.pool = { query: async (...args) => {
@@ -94,16 +95,18 @@ async function writeDbStub(count: number): Promise<unknown[][]> {
 }
 
 async function loadUploads(count = 0): Promise<{ mod: UploadsModule; calls: unknown[][] }> {
+  activeRuntimeDir = path.join(testOutDir, `runtime-uploads-${Date.now()}-${Math.random()}`);
   const calls = await writeDbStub(count);
-  const uploadsPath = path.join(runtimeOutDir, "lib", "uploads.js");
+  const uploadsPath = path.join(activeRuntimeDir, "lib", "uploads.js");
   await transpileSource(path.join(process.cwd(), "lib", "uploads.ts"), uploadsPath);
   delete require.cache[uploadsPath];
   return { mod: requireFromTest(uploadsPath), calls };
 }
 
 async function loadOrders(count = 0): Promise<{ mod: OrdersModule; calls: unknown[][] }> {
+  activeRuntimeDir = path.join(testOutDir, `runtime-orders-${Date.now()}-${Math.random()}`);
   const calls = await writeDbStub(count);
-  const ordersPath = path.join(runtimeOutDir, "lib", "orders.js");
+  const ordersPath = path.join(activeRuntimeDir, "lib", "orders.js");
   await transpileSource(path.join(process.cwd(), "lib", "orders.ts"), ordersPath);
   delete require.cache[ordersPath];
   return { mod: requireFromTest(ordersPath), calls };

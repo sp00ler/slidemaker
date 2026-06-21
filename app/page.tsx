@@ -11,6 +11,9 @@ import {
 } from "react";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
 
+const HERO_VIDEOS = ["/hero1.mp4", "/hero2.mp4", "/hero3.mp4"];
+const HERO_FADE_MS = 800;
+
 const WISHES_MAX = 500;
 const AUTHOR_EMAIL = "custom@slidemaker.ru";
 const MAX_UPLOAD_SLIDES = 15;
@@ -126,7 +129,6 @@ export default function Home() {
   const [style, setStyle] = useState<StyleId>("business");
   const [wishes, setWishes] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [authorModalOpen, setAuthorModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState("");
@@ -137,6 +139,9 @@ export default function Home() {
   const [unlockedSlide, setUnlockedSlide] = useState(1);
   const formRef = useRef<HTMLDivElement>(null);
   const slotsRef = useRef(slots);
+  const videoARef = useRef<HTMLVideoElement>(null);
+  const videoBRef = useRef<HTMLVideoElement>(null);
+  const videoIdxRef = useRef(0);
 
   const tariff = TARIFFS[tariffId];
   const isAuthor = Boolean(tariff.manual);
@@ -154,6 +159,55 @@ export default function Home() {
       slotsRef.current.forEach((slot) => {
         if (slot.previewUrl) URL.revokeObjectURL(slot.previewUrl);
       });
+    };
+  }, []);
+
+  useEffect(() => {
+    const a = videoARef.current;
+    const b = videoBRef.current;
+    if (!a || !b) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    a.src = HERO_VIDEOS[0];
+    a.style.opacity = "1";
+    b.style.opacity = "0";
+    void a.play();
+
+    if (reducedMotion) return;
+
+    // preload next clip into standby
+    b.src = HERO_VIDEOS[1 % HERO_VIDEOS.length];
+    b.load();
+
+    let active = a;
+    let standby = b;
+
+    function crossfade() {
+      videoIdxRef.current = (videoIdxRef.current + 1) % HERO_VIDEOS.length;
+      void standby.play().then(() => {
+        standby.style.transition = `opacity ${HERO_FADE_MS}ms ease`;
+        active.style.transition = `opacity ${HERO_FADE_MS}ms ease`;
+        standby.style.opacity = "1";
+        active.style.opacity = "0";
+
+        const prev = active;
+        active = standby;
+        standby = prev;
+
+        const preloadIdx = (videoIdxRef.current + 1) % HERO_VIDEOS.length;
+        standby.src = HERO_VIDEOS[preloadIdx];
+        standby.load();
+
+        active.addEventListener("ended", crossfade, { once: true });
+      });
+    }
+
+    a.addEventListener("ended", crossfade, { once: true });
+
+    return () => {
+      a.removeEventListener("ended", crossfade);
+      b.removeEventListener("ended", crossfade);
     };
   }, []);
 
@@ -200,20 +254,12 @@ export default function Home() {
   }
 
   function selectTariff(id: Tariff["id"]) {
-    if (TARIFFS[id].manual) {
-      setAuthorModalOpen(true);
-      return;
-    }
     setTariffId(id);
     setError("");
-  }
-
-  function confirmAuthor() {
-    setTariffId("author");
-    setDetailsOpen(true);
-    setAuthorModalOpen(false);
-    setError("");
-    window.setTimeout(scrollToForm, 0);
+    if (TARIFFS[id].manual) {
+      setDetailsOpen(true);
+      window.setTimeout(scrollToForm, 0);
+    }
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -282,91 +328,127 @@ export default function Home() {
     <>
       <main>
         <nav className="navbar">
-          <div className="navbar-brand">⚡ Slidemaker</div>
+          <div className="navbar-brand">Slide<span>maker</span></div>
           <div className="navbar-tagline">Презентации за минуту</div>
         </nav>
 
-        <section className="hero reveal">
-          <div className="hero-badge">🤖 Генерация ИИ · 💳 Оплата ЮКассой</div>
-          <h1>Презентация на любую тему — за минуту</h1>
-          <p>
-            Опишите тему, выберите стиль и количество слайдов. Готовый .pptx
-            придёт на почту сразу после оплаты.
-          </p>
-          <button className="hero-cta" type="button" onClick={scrollToForm}>
-            Заказать презентацию →
-          </button>
-          <div className="slide-preview" aria-hidden="true">
-            <div className="slide-preview-bar" />
-            <div className="slide-preview-title">Внедрение ИИ в ритейле 2024</div>
-            <div className="slide-preview-lines">
-              <span />
-              <span />
-              <span />
+        <section className="hero">
+          <video ref={videoARef} className="hero-video" muted playsInline aria-hidden="true" />
+          <video ref={videoBRef} className="hero-video" muted playsInline aria-hidden="true" />
+          <div className="hero-overlay" aria-hidden="true" />
+          <div className="hero-inner">
+            <div className="hero-text">
+              <div className="hero-badge">ИИ-генерация · Оплата ЮКассой</div>
+              <h1>Презентация на любую тему — <span className="grad">за минуту</span></h1>
+              <p>
+                Опишите тему, выберите стиль и количество слайдов. Готовый .pptx
+                придёт на почту сразу после оплаты.
+              </p>
+              <div className="hero-gens-badge">
+                <span className="dot" />
+                <span>2 генерации за оплату · вторая в подарок</span>
+              </div>
+              <div className="hero-cta-row">
+                <button className="hero-cta" type="button" onClick={scrollToForm}>
+                  Заказать презентацию →
+                </button>
+                <span className="hero-note">от 299 ₽ · 3–5 мин</span>
+              </div>
             </div>
-            <div className="slide-preview-chart">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
+            <div className="hero-preview" aria-hidden="true">
+              <div className="slide-preview-wrap">
+                <div className="slide-badge badge-ai">
+                  <span className="badge-icon">⚡</span>
+                  <span>Готово за <span className="badge-s">3 мин</span></span>
+                </div>
+                <div className="slide-mock">
+                  <div className="slide-mock-kicker">Slidemaker · AI Generated</div>
+                  <div className="slide-mock-bar" />
+                  <div className="slide-mock-title">
+                    Внедрение ИИ в розничной торговле<br />Стратегическая презентация Q4
+                  </div>
+                  <div className="slide-mock-lines">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <div className="slide-mock-chart">
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+                <div className="slide-badge badge-time">
+                  <span className="badge-icon">📬</span>
+                  <span>На <span className="badge-s">email</span> сразу</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="slide-preview-label">↑ пример слайда из готовой презентации</div>
         </section>
 
-        <section className="steps-section reveal">
+        <section className="steps-v3-section reveal">
           <div className="container">
-            <h2>Как это работает</h2>
-            <div className="steps reveal-stagger">
-              <div className="step">
-                <div className="step-num">1</div>
-                <div className="step-body">
-                  <strong>Опишите тему</strong>
-                  <p>Укажите email, тему, выберите стиль и количество слайдов — это займёт 30 секунд.</p>
+            <h2 className="steps-v3-heading">Как это работает</h2>
+            <div className="steps-v3 reveal-stagger">
+
+              <div className="step-v3">
+                <div className="step-v3-left">
+                  <div className="step-v3-num" aria-hidden="true">1</div>
+                  <div className="step-v3-connector" aria-hidden="true" />
+                </div>
+                <div className="step-v3-body">
+                  <div className="step-v3-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </div>
+                  <strong className="step-v3-title">Опишите тему</strong>
+                  <p className="step-v3-desc">Укажите email, тему, выберите стиль и количество слайдов — займёт 30 секунд.</p>
                 </div>
               </div>
-              <div className="step">
-                <div className="step-num">2</div>
-                <div className="step-body">
-                  <strong>Оплатите картой</strong>
-                  <p>Безопасный редирект на ЮКассу. Принимаем Visa, Mastercard, Мир, СБП.</p>
+
+              <div className="step-v3">
+                <div className="step-v3-left">
+                  <div className="step-v3-num" aria-hidden="true">2</div>
+                  <div className="step-v3-connector" aria-hidden="true" />
+                </div>
+                <div className="step-v3-body">
+                  <div className="step-v3-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="5" width="20" height="14" rx="2" />
+                      <path d="M2 10h20" />
+                    </svg>
+                  </div>
+                  <strong className="step-v3-title">Оплатите картой</strong>
+                  <p className="step-v3-desc">Безопасный редирект на ЮКассу. Принимаем Visa, Mastercard, Мир, СБП.</p>
                 </div>
               </div>
-              <div className="step">
-                <div className="step-num">3</div>
-                <div className="step-body">
-                  <strong>Получите .pptx на почту</strong>
-                  <p>ИИ генерирует презентацию и отправляет файл на вашу почту — обычно в течение 3–5 минут.</p>
+
+              <div className="step-v3">
+                <div className="step-v3-left">
+                  <div className="step-v3-num" aria-hidden="true">3</div>
+                  {/* no connector on last step */}
+                </div>
+                <div className="step-v3-body">
+                  <div className="step-v3-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                      <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                  </div>
+                  <strong className="step-v3-title">Получите .pptx на почту</strong>
+                  <p className="step-v3-desc">ИИ генерирует презентацию и отправляет файл — обычно 3–5 минут.</p>
                 </div>
               </div>
+
             </div>
           </div>
         </section>
 
-        <section className="tariffs-section reveal">
-          <div className="container">
-            <h2>Выберите тариф</h2>
-            <div className="tariffs-ai">
-              {(["basic", "standard"] as const).map((id) => (
-                <TariffCard
-                  key={id}
-                  tariff={TARIFFS[id]}
-                  selected={tariffId === id}
-                  compact={false}
-                  onSelect={() => selectTariff(id)}
-                />
-              ))}
-            </div>
-            <div className="tariff-divider">или закажите у живого дизайнера</div>
-            <TariffCard
-              tariff={TARIFFS.author}
-              selected={tariffId === "author"}
-              compact={false}
-              onSelect={() => selectTariff("author")}
-            />
-          </div>
-        </section>
 
         <section className="form-section reveal" ref={formRef}>
           <div className="container">
@@ -420,21 +502,22 @@ export default function Home() {
 
                 <div className="field">
                   <label>Тариф</label>
-                  <div className="tariffs-ai form-tariffs-ai">
+                  <div className="tariffs-ai">
                     {(["basic", "standard"] as const).map((id) => (
                       <TariffCard
                         key={id}
                         tariff={TARIFFS[id]}
                         selected={tariffId === id}
-                        compact
+                        compact={false}
                         onSelect={() => selectTariff(id)}
                       />
                     ))}
                   </div>
+                  <div className="tariff-divider">или закажите у живого дизайнера</div>
                   <TariffCard
                     tariff={TARIFFS.author}
                     selected={tariffId === "author"}
-                    compact
+                    compact={false}
                     onSelect={() => selectTariff("author")}
                   />
                 </div>
@@ -493,7 +576,12 @@ export default function Home() {
 
                 {isAuthor && (
                   <div className="author-form-note visible">
-                    ✍️ Авторский тариф — стиль и структуру определит дизайнер на основе вашей работы. Укажите пожелания ниже.
+                    <strong>Как работает авторский тариф:</strong>
+                    <ul style={{ margin: "8px 0 0", paddingLeft: "18px", fontSize: "13px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <li>Живой дизайнер разработает презентацию по вашим материалам (диплом, ВКР, статья).</li>
+                      <li>После оплаты пришлите файлы работы на почту <code>{AUTHOR_EMAIL}</code>.</li>
+                      <li>Срок выполнения — до {TARIFFS.author.etaHours} часов. Одна правка включена.</li>
+                    </ul>
                   </div>
                 )}
 
@@ -562,62 +650,22 @@ export default function Home() {
         </section>
 
         <footer className="footer">
-          <div className="footer-brand">⚡ slidemaker.ru</div>
+          <div className="footer-brand">slidemaker.ru</div>
           <div className="footer-links">
             <a href="#">Политика конфиденциальности</a>
             <a href="#">Оферта</a>
             <a href="#">Контакты</a>
           </div>
-          <div className="footer-copy">© 2024 slidemaker.ru · Презентации ИИ и под ключ</div>
+          <div className="footer-copy">© 2025 slidemaker.ru · Презентации ИИ и под ключ</div>
         </footer>
+        <div className="sticky-cta">
+          <button className="btn-primary" type="button" onClick={scrollToForm}>
+            Заказать презентацию — {tariff.price} ₽
+          </button>
+        </div>
       </main>
 
-      {authorModalOpen && (
-        <div className="modal-overlay open" onMouseDown={() => setAuthorModalOpen(false)}>
-          <div className="modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
-            <button className="modal-close" type="button" onClick={() => setAuthorModalOpen(false)} aria-label="Закрыть">
-              ✕
-            </button>
-            <div className="modal-top-badge">✍️ Авторская · Под ключ</div>
-            <h3>Как работает авторский тариф</h3>
-            <div className="modal-sub">
-              Живой дизайнер создаёт презентацию на основе ваших материалов. Не шаблон — ваши реальные данные.
-            </div>
-            <div className="modal-checklist">
-              <div className="modal-check-item">
-                <div className="modal-check-icon">📄</div>
-                <div className="modal-check-body">
-                  <strong>Ваша работа (ВКР / диплом / диссертация)</strong>
-                  <p>Пришлёте файл после оплаты на <strong>{AUTHOR_EMAIL}</strong> — это основа для слайдов.</p>
-                </div>
-              </div>
-              <div className="modal-check-item">
-                <div className="modal-check-icon">💬</div>
-                <div className="modal-check-body">
-                  <strong>Пожелания и дедлайн</strong>
-                  <p>Укажите акценты и желаемый срок в поле «Пожелания». Дизайнер свяжется при необходимости.</p>
-                </div>
-              </div>
-              <div className="modal-check-item">
-                <div className="modal-check-icon">🎨</div>
-                <div className="modal-check-body">
-                  <strong>Результат за {TARIFFS.author.etaHours} часов</strong>
-                  <p>Готовая .pptx-презентация с реальными данными из вашей работы. Одна правка включена.</p>
-                </div>
-              </div>
-            </div>
-            <div className="modal-email-hint">
-              После оплаты пришлите файл работы на <code>{AUTHOR_EMAIL}</code> — дизайнер начнёт сразу.
-            </div>
-            <button className="btn btn-amber" type="button" onClick={confirmAuthor}>
-              Понятно, продолжить →
-            </button>
-            <button className="modal-cancel" type="button" onClick={() => setAuthorModalOpen(false)}>
-              Отмена
-            </button>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }
@@ -637,7 +685,7 @@ function SlideUploader({
   unlockedSlide: number;
   setUnlockedSlide: Dispatch<SetStateAction<number>>;
 }) {
-  const visibleCount = Math.min(slideCount, unlockedSlide);
+  const visibleCount = Math.min(unlockedSlide, slideCount);
 
   function updateSlot(slotNumber: number, next: UploadSlotState) {
     setSlots((current) => {
@@ -866,7 +914,13 @@ function UploadSlot({
           </div>
         ) : (
           <label className="slide-empty">
-            <span className="slide-empty-icon">🖼️</span>
+            <span className="slide-empty-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </span>
             <span className="slide-empty-title">Перетащите файл или выберите</span>
             <span className="slide-empty-hint">PNG, JPEG, WebP · до 5 МБ</span>
             <input
@@ -888,7 +942,7 @@ function UploadSlot({
         />
         <div className="slide-desc-row">
           <span>{slot.description.length} / 200</span>
-          <span>{slot.status === "ready" || slot.status === "text-only" ? "следующий слайд откроется автоматически" : ""}</span>
+          <span>{slot.status === "ready" || slot.status === "text-only" ? "слайд заполнен" : ""}</span>
         </div>
       </div>
     </div>
@@ -907,45 +961,92 @@ function TariffCard({
   onSelect: () => void;
 }) {
   const isAuthor = Boolean(tariff.manual);
+  const isStandard = tariff.id === "standard";
 
   return (
-    <button
-      className={`tariff-card ${selected ? "active" : ""} ${isAuthor ? "author" : ""} ${compact ? "compact" : ""}`}
-      type="button"
-      onClick={onSelect}
-    >
-      {isAuthor ? (
-        <div className="tariff-author-row">
-          <div className="tariff-badge">Авторская</div>
-          <div className="tariff-human-badge">✍️ Под ключ</div>
-        </div>
-      ) : (
-        <div className="tariff-badge">
-          {tariff.name}
-          {tariff.id === "standard" && <span className="tariff-popular">Популярный</span>}
+    <div className="tariff-v3-wrapper">
+      {isStandard && (
+        <div className="tariff-v3-popular-pill" aria-label="Популярный тариф">
+          Популярный
         </div>
       )}
-      <div className="tariff-price">
-        <sup>₽</sup>
-        {tariff.price}
-      </div>
-      <div className="tariff-slides">
-        {isAuthor ? `живой дизайнер · ${tariff.etaHours}ч · 1 правка` : `до ${tariff.maxSlides} слайдов`}
-      </div>
-      {!compact && (
-        <>
-          {isAuthor && (
-            <div className="tariff-author-desc">
-              Для ВКР, диплома, диссертации — живой дизайнер, ваши реальные данные
+      <button
+        className={[
+          "tariff-v3-card",
+          isAuthor ? "tariff-v3-card--author" : "",
+          isStandard ? "tariff-v3-card--standard" : "",
+          selected ? "tariff-v3-card--selected" : "",
+          compact ? "tariff-v3-card--compact" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        type="button"
+        onClick={onSelect}
+      >
+        {/* Header row */}
+        <div className="tariff-v3-head">
+          {isAuthor ? (
+            <div className="tariff-v3-name-row">
+              <span className="tariff-v3-name tariff-v3-name--amber">Авторская</span>
+              <span className="tariff-v3-human-pill">Под ключ</span>
             </div>
+          ) : (
+            <span className="tariff-v3-name">{tariff.name}</span>
           )}
-          <ul className="tariff-features">
-            {tariffFeatures[tariff.id].map((feature) => (
-              <li key={feature}>{feature}</li>
-            ))}
-          </ul>
-        </>
-      )}
-    </button>
+        </div>
+
+        {/* Price */}
+        <div className="tariff-v3-price">
+          <span className="tariff-v3-price-currency">₽</span>
+          <span className="tariff-v3-price-amount">{tariff.price}</span>
+        </div>
+
+        {/* Subtitle */}
+        <div className="tariff-v3-subtitle">
+          {isAuthor
+            ? `живой дизайнер · ${tariff.etaHours}ч · 1 правка`
+            : `до ${tariff.maxSlides} слайдов`}
+        </div>
+
+        {/* Features — only in non-compact mode */}
+        {!compact && (
+          <>
+            {isAuthor && (
+              <p className="tariff-v3-author-desc">
+                Для ВКР, диплома, диссертации — живой дизайнер, ваши реальные данные
+              </p>
+            )}
+            <ul className="tariff-v3-features">
+              {tariffFeatures[tariff.id].map((feature) => (
+                <li key={feature} className="tariff-v3-feature">
+                  <svg
+                    className="tariff-v3-check"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {/* Selected checkmark badge (top-right corner) */}
+        {selected && (
+          <div className="tariff-v3-selected-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )}
+      </button>
+    </div>
   );
 }

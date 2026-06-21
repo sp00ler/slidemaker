@@ -56,7 +56,8 @@ type GenerateModule = {
 };
 
 const testOutDir = path.join(process.cwd(), ".test-dist");
-const runtimeOutDir = path.join(testOutDir, "runtime");
+const runtimeBaseDir = path.join(testOutDir, "runtime");
+let activeRuntimeDir = runtimeBaseDir;
 const requireFromTest = createRequire(__filename);
 const moduleWithResolver = Module as typeof Module & {
   _resolveFilename: (
@@ -78,7 +79,7 @@ moduleWithResolver._resolveFilename = function (
   if (request.startsWith("@/")) {
     return originalResolveFilename.call(
       this,
-      path.join(runtimeOutDir, request.slice(2)),
+      path.join(activeRuntimeDir, request.slice(2)),
       parent,
       isMain,
       options
@@ -104,10 +105,11 @@ async function transpileSource(srcPath: string, outPath: string): Promise<void> 
 
 async function loadOrders(): Promise<{ mod: OrderModule; calls: unknown[][] }> {
   const calls: unknown[][] = [];
-  const ordersOutPath = path.join(runtimeOutDir, "lib", "orders.js");
-  await fs.mkdir(path.join(runtimeOutDir, "lib"), { recursive: true });
+  activeRuntimeDir = path.join(testOutDir, `runtime-orders-${Date.now()}-${Math.random()}`);
+  const ordersOutPath = path.join(activeRuntimeDir, "lib", "orders.js");
+  await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
   await fs.writeFile(
-    path.join(runtimeOutDir, "lib", "db.js"),
+    path.join(activeRuntimeDir, "lib", "db.js"),
     `exports.pool = { query: async (...args) => {
       global.__orderQueryCalls.push(args);
       return { rows: [{ id: "order-id" }] };
@@ -130,10 +132,10 @@ async function loadOrders(): Promise<{ mod: OrderModule; calls: unknown[][] }> {
 async function loadCheckout(): Promise<CheckoutModule> {
   await transpileSource(
     path.join(process.cwd(), "lib", "checkout-validation.ts"),
-    path.join(runtimeOutDir, "lib", "checkout-validation.js")
+    path.join(activeRuntimeDir, "lib", "checkout-validation.js")
   );
 
-  return requireFromTest(path.join(runtimeOutDir, "lib", "checkout-validation.js"));
+  return requireFromTest(path.join(activeRuntimeDir, "lib", "checkout-validation.js"));
 }
 
 async function loadCheckoutRoute(): Promise<{
@@ -145,11 +147,12 @@ async function loadCheckoutRoute(): Promise<{
     createPayment: [] as unknown[],
     bindUploads: [] as unknown[],
   };
-  const ordersPath = path.join(runtimeOutDir, "lib", "orders.js");
-  const yookassaPath = path.join(runtimeOutDir, "lib", "yookassa.js");
-  const envPath = path.join(runtimeOutDir, "lib", "env.js");
-  const uploadsPath = path.join(runtimeOutDir, "lib", "uploads.js");
-  await fs.mkdir(path.join(runtimeOutDir, "lib"), { recursive: true });
+  activeRuntimeDir = path.join(testOutDir, `runtime-checkout-${Date.now()}-${Math.random()}`);
+  const ordersPath = path.join(activeRuntimeDir, "lib", "orders.js");
+  const yookassaPath = path.join(activeRuntimeDir, "lib", "yookassa.js");
+  const envPath = path.join(activeRuntimeDir, "lib", "env.js");
+  const uploadsPath = path.join(activeRuntimeDir, "lib", "uploads.js");
+  await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
   await fs.writeFile(
     ordersPath,
     `exports.createOrder = async (data) => {
@@ -183,13 +186,13 @@ async function loadCheckoutRoute(): Promise<{
 
   await transpileSource(
     path.join(process.cwd(), "lib", "tariffs.ts"),
-    path.join(runtimeOutDir, "lib", "tariffs.js")
+    path.join(activeRuntimeDir, "lib", "tariffs.js")
   );
   await transpileSource(
     path.join(process.cwd(), "lib", "checkout-validation.ts"),
-    path.join(runtimeOutDir, "lib", "checkout-validation.js")
+    path.join(activeRuntimeDir, "lib", "checkout-validation.js")
   );
-  const routePath = path.join(runtimeOutDir, "app", "api", "checkout", "route.js");
+  const routePath = path.join(activeRuntimeDir, "app", "api", "checkout", "route.js");
   await transpileSource(
     path.join(process.cwd(), "app", "api", "checkout", "route.ts"),
     routePath
@@ -208,13 +211,14 @@ async function loadGenerateManual(): Promise<{
     generateDeck: [] as unknown[],
     mailer: [] as string[],
   };
-  const ordersPath = path.join(runtimeOutDir, "lib", "orders.js");
-  const anthropicPath = path.join(runtimeOutDir, "lib", "anthropic.js");
-  const pptxPath = path.join(runtimeOutDir, "lib", "pptx.js");
-  const mailerPath = path.join(runtimeOutDir, "lib", "mailer.js");
-  const envPath = path.join(runtimeOutDir, "lib", "env.js");
-  const tariffsPath = path.join(runtimeOutDir, "lib", "tariffs.js");
-  await fs.mkdir(path.join(runtimeOutDir, "lib"), { recursive: true });
+  activeRuntimeDir = path.join(testOutDir, `runtime-generate-${Date.now()}-${Math.random()}`);
+  const ordersPath = path.join(activeRuntimeDir, "lib", "orders.js");
+  const anthropicPath = path.join(activeRuntimeDir, "lib", "anthropic.js");
+  const pptxPath = path.join(activeRuntimeDir, "lib", "pptx.js");
+  const mailerPath = path.join(activeRuntimeDir, "lib", "mailer.js");
+  const envPath = path.join(activeRuntimeDir, "lib", "env.js");
+  const tariffsPath = path.join(activeRuntimeDir, "lib", "tariffs.js");
+  await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
   await fs.writeFile(
     ordersPath,
     `exports.markAwaitingManual = async (id) => global.__generateCalls.markAwaitingManual.push(id);
@@ -255,7 +259,7 @@ async function loadGenerateManual(): Promise<{
   }
   (globalThis as unknown as { __generateCalls: typeof calls }).__generateCalls = calls;
 
-  const generatePath = path.join(runtimeOutDir, "lib", "generate.js");
+  const generatePath = path.join(activeRuntimeDir, "lib", "generate.js");
   await transpileSource(path.join(process.cwd(), "lib", "generate.ts"), generatePath);
   delete require.cache[generatePath];
 

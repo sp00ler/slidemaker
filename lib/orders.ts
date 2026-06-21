@@ -92,3 +92,20 @@ export async function bindUploadFilesToOrder(
     [orderId, uploadToken]
   );
 }
+
+export async function getOrderFiles(
+  orderId: string
+): Promise<Array<{ slide_number: number; stored_path: string; description: string | null }>> {
+  const { rows } = await pool.query<{
+    slide_number: number;
+    stored_path: string;
+    description: string | null;
+  }>(
+    `SELECT slide_number, stored_path, description
+     FROM order_files
+     WHERE order_id = $1
+     ORDER BY slide_number ASC`,
+    [orderId]
+  );
+  return rows;
+}

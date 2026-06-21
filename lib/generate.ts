@@ -1,7 +1,13 @@
 import path from "path";
 import crypto from "crypto";
 import { promises as fs } from "fs";
-import { OrderRow, markAwaitingManual, markDone, markError } from "@/lib/orders";
+import {
+  OrderRow,
+  getOrderFiles,
+  markAwaitingManual,
+  markDone,
+  markError,
+} from "@/lib/orders";
 import { generateDeck } from "@/lib/anthropic";
 import { buildPptx } from "@/lib/pptx";
 import {
@@ -76,9 +82,18 @@ export async function processOrder(order: OrderRow): Promise<void> {
           storyboard: order.storyboard,
         });
         title = deck.title;
+        const slideImages = new Map(
+          (await getOrderFiles(order.id)).map((file) => [
+            file.slide_number,
+            {
+              path: file.stored_path,
+              description: file.description,
+            },
+          ])
+        );
 
         await fs.mkdir(dir, { recursive: true });
-        await buildPptx(deck, order.style, outPath);
+        await buildPptx(deck, order.style, outPath, slideImages);
         break;
       } catch (e) {
         if (attempt === 2) throw e;

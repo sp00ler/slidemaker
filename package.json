@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "typecheck": "tsc --noEmit",
-    "test": "node -e \"require('fs').rmSync('.test-dist',{recursive:true,force:true})\" && tsc --outDir .test-dist --rootDir . --module commonjs --target ES2021 --esModuleInterop --moduleResolution node --skipLibCheck --noEmit false lib/__tests__/anthropic.test.ts lib/__tests__/mailer.test.ts lib/__tests__/order-wishes-storyboard.test.ts lib/__tests__/uploads.test.ts && node --test --test-concurrency=1 .test-dist/lib/__tests__/anthropic.test.js .test-dist/lib/__tests__/mailer.test.js .test-dist/lib/__tests__/order-wishes-storyboard.test.js .test-dist/lib/__tests__/uploads.test.js && node -e \"require('fs').rmSync('.test-dist',{recursive:true,force:true})\"",
+    "test": "node -e \"require('fs').rmSync('.test-dist',{recursive:true,force:true})\" && tsc --outDir .test-dist --rootDir . --module commonjs --target ES2021 --esModuleInterop --moduleResolution node --skipLibCheck --noEmit false lib/__tests__/anthropic.test.ts lib/__tests__/mailer.test.ts lib/__tests__/order-wishes-storyboard.test.ts lib/__tests__/uploads.test.ts lib/__tests__/pptx.test.ts && node --test --test-concurrency=1 .test-dist/lib/__tests__/anthropic.test.js .test-dist/lib/__tests__/mailer.test.js .test-dist/lib/__tests__/order-wishes-storyboard.test.js .test-dist/lib/__tests__/uploads.test.js .test-dist/lib/__tests__/pptx.test.js && node -e \"require('fs').rmSync('.test-dist',{recursive:true,force:true})\"",
     "cleanup:downloads": "node scripts/cleanup-downloads.mjs",
     "cleanup:uploads": "node scripts/cleanup-uploads.mjs",
     "start": "next start -p 3000"

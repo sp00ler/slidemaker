@@ -1,3 +1,4 @@
+import path from "path";
 import pptxgen from "pptxgenjs";
 import type { Deck, Slide } from "@/lib/anthropic";
 
@@ -53,6 +54,20 @@ const THEMES: Record<string, Theme> = {
 // Размеры для LAYOUT_WIDE: 13.33 x 7.5 дюйма.
 const W = 13.33;
 const H = 7.5;
+const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
+
+type SlideImage = {
+  path: string;
+  description: string | null;
+};
+
+function resolveSlideImagePath(filePath: string): string | null {
+  const resolved = path.resolve(process.cwd(), filePath);
+  if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) {
+    return null;
+  }
+  return resolved;
+}
 
 function renderTitle(slide: pptxgen.Slide, s: Slide, t: Theme) {
   slide.background = { color: t.titleBg };
@@ -112,7 +127,12 @@ function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme) {
   }
 }
 
-function renderContent(slide: pptxgen.Slide, s: Slide, t: Theme) {
+function renderContent(
+  slide: pptxgen.Slide,
+  s: Slide,
+  t: Theme,
+  hasImage: boolean
+) {
   slide.background = { color: t.bg };
   // верхняя акцентная полоса
   slide.addShape("rect", { x: 0, y: 0, w: W, h: 0.22, fill: { color: t.primary } });
@@ -132,6 +152,8 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Theme) {
 
   const bullets = s.bullets.filter((b) => b.trim().length > 0);
   if (bullets.length > 0) {
+    const bulletW = hasImage ? 5.8 : W - 1.8;
+    const bulletH = hasImage ? 4.9 : H - 2.6;
     slide.addText(
       bullets.map((b) => ({
         text: b,
@@ -144,7 +166,7 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Theme) {
           paraSpaceAfter: 10,
         },
       })),
-      { x: 0.9, y: 1.9, w: W - 1.8, h: H - 2.6, valign: "top", fit: "shrink" }
+      { x: 0.9, y: 1.9, w: bulletW, h: bulletH, valign: "top", fit: "shrink" }
     );
   }
 
@@ -163,7 +185,8 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Theme) {
 export async function buildPptx(
   deck: Deck,
   style: string,
-  outPath: string
+  outPath: string,
+  slideImages?: Map<number, SlideImage>
 ): Promise<void> {
   const theme = THEMES[style] ?? THEMES.business;
 
@@ -172,8 +195,11 @@ export async function buildPptx(
   pptx.author = "SlideMaker";
   pptx.title = deck.title;
 
-  for (const s of deck.slides) {
+  for (let index = 0; index < deck.slides.length; index++) {
+    const s = deck.slides[index];
     const slide = pptx.addSlide();
+    const image = s.layout === "content" ? slideImages?.get(index + 1) : undefined;
+    const resolvedPath = image ? resolveSlideImagePath(image.path) : null;
     switch (s.layout) {
       case "title":
         renderTitle(slide, s, theme);
@@ -182,7 +208,36 @@ export async function buildPptx(
         renderSection(slide, s, theme);
         break;
       default: // content | conclusion
-        renderContent(slide, s, theme);
+        renderContent(slide, s, theme, Boolean(resolvedPath));
+        if (resolvedPath && image) {
+          const bullets = s.bullets.filter((b) => b.trim().length > 0);
+          const hasBullets = bullets.length > 0;
+          const imageX = hasBullets ? 7.2 : 2.0;
+          const imageY = 1.85;
+          const imageW = hasBullets ? 5.2 : 9.3;
+          const imageH = hasBullets ? 3.45 : 4.45;
+          slide.addImage({
+            path: resolvedPath,
+            x: imageX,
+            y: imageY,
+            w: imageW,
+            h: imageH,
+            altText: image.description ?? "",
+          });
+          if (image.description) {
+            slide.addText(image.description, {
+              x: imageX,
+              y: imageY + imageH + 0.12,
+              w: imageW,
+              h: 0.45,
+              fontSize: 12,
+              color: theme.subText,
+              fontFace: theme.font,
+              italic: true,
+              fit: "shrink",
+            });
+          }
+        }
         break;
     }
   }

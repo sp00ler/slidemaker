@@ -1,11 +1,60 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
 
 const WISHES_MAX = 500;
-const STORYBOARD_MAX = 1000;
 const AUTHOR_EMAIL = "custom@slidemaker.ru";
+const MAX_UPLOAD_SLIDES = 15;
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
+const ALLOWED_UPLOAD_MIME = ["image/png", "image/jpeg", "image/webp"] as const;
+
+type UploadStatus =
+  | "empty"
+  | "loading"
+  | "ready"
+  | "text-only"
+  | "error-size"
+  | "error-type";
+
+type UploadSlotState = {
+  status: UploadStatus;
+  description: string;
+  error?: string;
+  fileName?: string;
+  fileSize?: string;
+  previewUrl?: string;
+};
+
+function createEmptySlot(): UploadSlotState {
+  return { status: "empty", description: "" };
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+function validateClientUpload(
+  file: File
+): { ok: true } | { ok: false; status: "error-size" | "error-type"; error: string } {
+  if (file.size > MAX_UPLOAD_SIZE) {
+    return { ok: false, status: "error-size", error: "Файл больше 5 МБ" };
+  }
+  if (!ALLOWED_UPLOAD_MIME.includes(file.type as (typeof ALLOWED_UPLOAD_MIME)[number])) {
+    return { ok: false, status: "error-type", error: "Только PNG, JPEG или WebP" };
+  }
+  return { ok: true };
+}
 
 const tariffFeatures: Record<Tariff["id"], string[]> = {
   basic: [
@@ -76,16 +125,57 @@ export default function Home() {
   const [slideCount, setSlideCount] = useState(8);
   const [style, setStyle] = useState<StyleId>("business");
   const [wishes, setWishes] = useState("");
-  const [storyboard, setStoryboard] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [authorModalOpen, setAuthorModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState("");
+  const [uploadToken, setUploadToken] = useState("");
+  const [slots, setSlots] = useState<UploadSlotState[]>(
+    () => Array.from({ length: MAX_UPLOAD_SLIDES }, createEmptySlot)
+  );
+  const [unlockedSlide, setUnlockedSlide] = useState(1);
   const formRef = useRef<HTMLDivElement>(null);
+  const slotsRef = useRef(slots);
 
   const tariff = TARIFFS[tariffId];
   const isAuthor = Boolean(tariff.manual);
+
+  useEffect(() => {
+    setUploadToken(globalThis.crypto.randomUUID());
+  }, []);
+
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
+
+  useEffect(() => {
+    return () => {
+      slotsRef.current.forEach((slot) => {
+        if (slot.previewUrl) URL.revokeObjectURL(slot.previewUrl);
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    const elements = Array.from(document.querySelectorAll<HTMLElement>(".reveal, .reveal-stagger"));
+    if (!elements.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12 }
+    );
+
+    elements.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (isAuthor) {
@@ -94,6 +184,11 @@ export default function Home() {
     }
     setSlideCount((value) => Math.min(Math.max(value, MIN_SLIDES), tariff.maxSlides));
   }, [isAuthor, tariff.maxSlides]);
+
+  useEffect(() => {
+    if (isAuthor) return;
+    setUnlockedSlide((value) => Math.min(Math.max(value, 1), slideCount));
+  }, [isAuthor, slideCount]);
 
   const ctaText = useMemo(() => {
     if (isAuthor) return `Авторская презентация — ${tariff.price} ₽`;
@@ -128,7 +223,6 @@ export default function Home() {
     const cleanEmail = email.trim();
     const cleanTopic = topic.trim();
     const cleanWishes = wishes.trim();
-    const cleanStoryboard = storyboard.trim();
 
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanEmail)) {
       setError("Введите корректный email");
@@ -153,16 +247,16 @@ export default function Home() {
         style: StyleId;
         slideCount?: number;
         wishes?: string;
-        storyboard?: string;
+        uploadToken?: string;
       } = {
         email: cleanEmail,
         tariff: tariffId,
         topic: cleanTopic,
         style,
         wishes: cleanWishes,
-        storyboard: cleanStoryboard,
       };
       if (!isAuthor) body.slideCount = slideCount;
+      if (!isAuthor && uploadToken) body.uploadToken = uploadToken;
 
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -192,7 +286,7 @@ export default function Home() {
           <div className="navbar-tagline">Презентации за минуту</div>
         </nav>
 
-        <section className="hero">
+        <section className="hero reveal">
           <div className="hero-badge">🤖 Генерация ИИ · 💳 Оплата ЮКассой</div>
           <h1>Презентация на любую тему — за минуту</h1>
           <p>
@@ -221,10 +315,10 @@ export default function Home() {
           <div className="slide-preview-label">↑ пример слайда из готовой презентации</div>
         </section>
 
-        <section className="steps-section">
+        <section className="steps-section reveal">
           <div className="container">
             <h2>Как это работает</h2>
-            <div className="steps">
+            <div className="steps reveal-stagger">
               <div className="step">
                 <div className="step-num">1</div>
                 <div className="step-body">
@@ -250,7 +344,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="tariffs-section">
+        <section className="tariffs-section reveal">
           <div className="container">
             <h2>Выберите тариф</h2>
             <div className="tariffs-ai">
@@ -274,7 +368,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="form-section" ref={formRef}>
+        <section className="form-section reveal" ref={formRef}>
           <div className="container">
             <h2>Оформить заказ</h2>
             {redirecting ? (
@@ -386,17 +480,24 @@ export default function Home() {
                   </>
                 )}
 
+                {!isAuthor && uploadToken && (
+                  <SlideUploader
+                    slideCount={slideCount}
+                    uploadToken={uploadToken}
+                    slots={slots}
+                    setSlots={setSlots}
+                    unlockedSlide={unlockedSlide}
+                    setUnlockedSlide={setUnlockedSlide}
+                  />
+                )}
+
                 {isAuthor && (
                   <div className="author-form-note visible">
                     ✍️ Авторский тариф — стиль и структуру определит дизайнер на основе вашей работы. Укажите пожелания ниже.
                   </div>
                 )}
 
-                <details
-                  className="details-field"
-                  open={detailsOpen}
-                  onToggle={(e) => setDetailsOpen(e.currentTarget.open)}
-                >
+                <details className="details-field" open={detailsOpen} onToggle={(e) => setDetailsOpen(e.currentTarget.open)}>
                   <summary>
                     {detailsOpen ? "− Скрыть подробные пожелания" : "+ Добавить подробные пожелания"}
                     <span>▼</span>
@@ -425,21 +526,6 @@ export default function Home() {
                       <div className={counterClass(wishes.length, WISHES_MAX)}>
                         {wishes.length} / {WISHES_MAX}
                       </div>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="storyboard">Сценарий по слайдам <span className="opt">(необязательно)</span></label>
-                      <textarea
-                        id="storyboard"
-                        rows={3}
-                        maxLength={STORYBOARD_MAX}
-                        value={storyboard}
-                        onChange={(e) => setStoryboard(e.target.value)}
-                        placeholder={"Слайд 1: Проблема рынка\nСлайд 2: Наше решение\nСлайд 3: Результаты..."}
-                      />
-                      <div className={counterClass(storyboard.length, STORYBOARD_MAX)}>
-                        {storyboard.length} / {STORYBOARD_MAX}
-                      </div>
-                      <div className="field-hint">Если указать заголовки слайдов — ИИ будет следовать вашей структуре.</div>
                     </div>
                   </div>
                 </details>
@@ -533,6 +619,279 @@ export default function Home() {
         </div>
       )}
     </>
+  );
+}
+
+function SlideUploader({
+  slideCount,
+  uploadToken,
+  slots,
+  setSlots,
+  unlockedSlide,
+  setUnlockedSlide,
+}: {
+  slideCount: number;
+  uploadToken: string;
+  slots: UploadSlotState[];
+  setSlots: Dispatch<SetStateAction<UploadSlotState[]>>;
+  unlockedSlide: number;
+  setUnlockedSlide: Dispatch<SetStateAction<number>>;
+}) {
+  const visibleCount = Math.min(slideCount, unlockedSlide);
+
+  function updateSlot(slotNumber: number, next: UploadSlotState) {
+    setSlots((current) => {
+      const copy = [...current];
+      const previous = copy[slotNumber - 1];
+      if (previous?.previewUrl && previous.previewUrl !== next.previewUrl) {
+        URL.revokeObjectURL(previous.previewUrl);
+      }
+      copy[slotNumber - 1] = next;
+      return copy;
+    });
+  }
+
+  function unlockNext(slotNumber: number) {
+    setUnlockedSlide((value) => Math.min(slideCount, Math.max(value, slotNumber + 1)));
+  }
+
+  function removeSlot(slotNumber: number) {
+    updateSlot(slotNumber, createEmptySlot());
+  }
+
+  function skipSlot(slotNumber: number) {
+    const previous = slots[slotNumber - 1];
+    updateSlot(slotNumber, { status: "text-only", description: previous?.description ?? "" });
+    unlockNext(slotNumber);
+  }
+
+  async function uploadSlotFile(slotNumber: number, file: File, description: string) {
+    const validation = validateClientUpload(file);
+    if (!validation.ok) {
+      updateSlot(slotNumber, {
+        status: validation.status,
+        description,
+        error: validation.error,
+      });
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    updateSlot(slotNumber, {
+      status: "loading",
+      description,
+      fileName: file.name,
+      fileSize: formatFileSize(file.size),
+      previewUrl,
+    });
+
+    try {
+      const form = new FormData();
+      form.append("uploadToken", uploadToken);
+      form.append("slideNumber", String(slotNumber));
+      form.append("file", file);
+      form.append("description", description);
+
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        const message = data.error || "Не удалось загрузить файл";
+        updateSlot(slotNumber, {
+          status: message.includes("5 МБ") ? "error-size" : "error-type",
+          description,
+          error: message,
+          fileName: file.name,
+          fileSize: formatFileSize(file.size),
+          previewUrl,
+        });
+        return;
+      }
+
+      updateSlot(slotNumber, {
+        status: "ready",
+        description,
+        fileName: file.name,
+        fileSize: formatFileSize(file.size),
+        previewUrl,
+      });
+      unlockNext(slotNumber);
+    } catch {
+      updateSlot(slotNumber, {
+        status: "error-type",
+        description,
+        error: "Не удалось отправить файл. Проверьте интернет.",
+        fileName: file.name,
+        fileSize: formatFileSize(file.size),
+        previewUrl,
+      });
+    }
+  }
+
+  return (
+    <div className="uploader" id="uploader-section">
+      <div className="uploader-head">
+        <div>
+          <div className="uploader-kicker">Картинки по слайдам</div>
+          <div className="uploader-title">Загрузите файлы под нужные слайды</div>
+        </div>
+        <div className="uploader-meta">{visibleCount} / {slideCount}</div>
+      </div>
+      <div className="uploader-list">
+        {Array.from({ length: visibleCount }, (_, index) => {
+          const slotNumber = index + 1;
+          return (
+            <UploadSlot
+              key={slotNumber}
+              slotNumber={slotNumber}
+              slot={slots[slotNumber - 1]}
+              onUpload={uploadSlotFile}
+              onRemove={removeSlot}
+              onSkip={skipSlot}
+              onDescriptionChange={(value) => {
+                setSlots((current) => {
+                  const copy = [...current];
+                  copy[slotNumber - 1] = {
+                    ...(copy[slotNumber - 1] ?? createEmptySlot()),
+                    description: value,
+                  };
+                  return copy;
+                });
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="uploader-foot">PNG, JPEG, WebP · до 5 МБ · один файл на слайд</div>
+    </div>
+  );
+}
+
+function UploadSlot({
+  slotNumber,
+  slot,
+  onUpload,
+  onRemove,
+  onSkip,
+  onDescriptionChange,
+}: {
+  slotNumber: number;
+  slot: UploadSlotState;
+  onUpload: (slotNumber: number, file: File, description: string) => Promise<void>;
+  onRemove: (slotNumber: number) => void;
+  onSkip: (slotNumber: number) => void;
+  onDescriptionChange: (value: string) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
+  function pickFile(file: File | undefined) {
+    if (!file || slot.status === "loading") return;
+    void onUpload(slotNumber, file, slot.description);
+  }
+
+  return (
+    <div className={`slide-slot ${slot.status} ${dragOver ? "drag-over" : ""}`}>
+      <div className="slide-slot-head">
+        <div className="slide-slot-badge">{slotNumber}</div>
+        <div>
+          <div className="slide-slot-title">Слайд {slotNumber}</div>
+          <div className="slide-slot-sub">
+            {slot.status === "text-only"
+              ? "Только текст"
+              : slot.status === "ready"
+                ? "Готово"
+                : slot.status === "loading"
+                  ? "Загрузка"
+                  : "Пусто"}
+          </div>
+        </div>
+        {(slot.status === "empty" || slot.status === "error-size" || slot.status === "error-type") && (
+          <button className="slide-slot-skip" type="button" onClick={() => onSkip(slotNumber)}>
+            пропустить
+          </button>
+        )}
+      </div>
+
+      <div
+        className="slide-dropzone"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          pickFile(e.dataTransfer.files?.[0]);
+        }}
+      >
+        {slot.status === "loading" ? (
+          <div className="slide-loading">
+            <span className="btn-spinner" />
+            <span>{slot.fileName}</span>
+          </div>
+        ) : slot.status === "ready" || slot.status === "error-size" || slot.status === "error-type" ? (
+          <div className="slide-ready">
+            {slot.previewUrl && <img src={slot.previewUrl} alt="" className="slide-thumb" />}
+            <div className="slide-ready-meta">
+              <strong>{slot.fileName}</strong>
+              <span>{slot.fileSize}</span>
+              {slot.error && <span className="slide-error">{slot.error}</span>}
+            </div>
+            <div className="slide-actions">
+              <label className="slide-action">
+                заменить
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => pickFile(e.target.files?.[0])}
+                />
+              </label>
+              <button className="slide-action danger" type="button" onClick={() => onRemove(slotNumber)}>
+                удалить
+              </button>
+            </div>
+          </div>
+        ) : slot.status === "text-only" ? (
+          <div className="slide-text-only">
+            <span>📝</span>
+            <span>Без изображения</span>
+            <label className="slide-action">
+              добавить фото
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => pickFile(e.target.files?.[0])}
+              />
+            </label>
+          </div>
+        ) : (
+          <label className="slide-empty">
+            <span className="slide-empty-icon">🖼️</span>
+            <span className="slide-empty-title">Перетащите файл или выберите</span>
+            <span className="slide-empty-hint">PNG, JPEG, WebP · до 5 МБ</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => pickFile(e.target.files?.[0])}
+            />
+          </label>
+        )}
+      </div>
+
+      <div className="slide-desc">
+        <textarea
+          rows={2}
+          maxLength={200}
+          placeholder="Коротко опишите, что должно быть на слайде"
+          value={slot.description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+        />
+        <div className="slide-desc-row">
+          <span>{slot.description.length} / 200</span>
+          <span>{slot.status === "ready" || slot.status === "text-only" ? "следующий слайд откроется автоматически" : ""}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 

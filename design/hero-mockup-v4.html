@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SlideMaker — Hero mockup v4 (Proof-First Editorial)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     SLIDEMAKER — Hero mockup v4 · "Proof-First Editorial"
+     Standalone validation file. NOT production. No framework.
+     Rules: light editorial base · cobalt action · ink type ·
+     real slide artifact · NO gradients/glass/glow/emoji.
+     ============================================================ */
+
+  :root {
+    --ink:        #0B0D10;   /* headings, primary text */
+    --ink-2:      #3A4048;   /* body */
+    --ink-3:      #6B7280;   /* muted */
+    --paper:      #FAFAF8;   /* warm-white base */
+    --white:      #FFFFFF;
+    --line:       #E6E6E1;   /* hairline border */
+    --line-2:     #D6D6CF;
+    --cobalt:     #1E4DD8;   /* the ONE action color */
+    --cobalt-h:   #1A41B8;
+    --cobalt-ink: #12245C;
+    --amber:      #F59E0B;   /* author/human tier signal ONLY */
+    --amber-ink:  #92610A;
+
+    --maxw: 1120px;
+    --r-card: 8px;
+    --r-input: 6px;
+    --r-pill: 999px;
+  }
+
+  * , *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink-2);
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
+
+  /* ── MOTION (Remote Rituals: subtle, human, once) ───── */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes settle { from { opacity: 0; transform: translateY(20px) scale(.985); } to { opacity: 1; transform: none; } }
+  .rise { opacity: 0; animation: fadeUp .7s cubic-bezier(.2,.7,.2,1) both; }
+  .d1 { animation-delay: .05s; } .d2 { animation-delay: .13s; }
+  .d3 { animation-delay: .21s; } .d4 { animation-delay: .29s; }
+
+  /* ── NAVBAR ─────────────────────────────────────────── */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(250,250,248,0.85);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    max-width: var(--maxw); margin: 0 auto; padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand {
+    font-weight: 800; font-size: 18px; letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .brand b { color: var(--cobalt); font-weight: 800; }
+  .nav-right { display: flex; align-items: center; gap: 22px; }
+  .nav-tag { font-size: 13px; color: var(--ink-3); }
+  .btn-ghost {
+    font-size: 14px; font-weight: 600; color: var(--ink);
+    border: 1px solid var(--line-2); border-radius: var(--r-input);
+    padding: 9px 16px; background: var(--white);
+    transition: border-color .18s ease, color .18s ease;
+  }
+  .btn-ghost:hover { border-color: var(--cobalt); color: var(--cobalt); }
+
+  /* ── HERO ───────────────────────────────────────────── */
+  .hero { padding: 96px 0 72px; position: relative; overflow: hidden; }
+  /* editorial baseline rule — quiet structure, not decoration */
+  .hero::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+    background: var(--line); opacity: 0;
+  }
+  .hero-grid {
+    display: grid; grid-template-columns: 1fr 0.82fr; gap: 64px;
+    align-items: center;
+  }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--cobalt);
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cobalt); }
+
+  h1 {
+    margin: 0 0 20px;
+    font-size: clamp(40px, 5.4vw, 68px);
+    font-weight: 800; letter-spacing: -0.045em; line-height: 1.03;
+    color: var(--ink);
+  }
+  h1 .soft { color: var(--ink-3); font-weight: 800; }
+
+  .lead {
+    margin: 0 0 32px; max-width: 30em;
+    font-size: 18px; line-height: 1.55; color: var(--ink-2);
+  }
+
+  .cta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--cobalt); color: #fff;
+    font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+    padding: 15px 26px; border: 0; border-radius: var(--r-input);
+    cursor: pointer;
+    transition: background .18s ease, transform .18s ease, box-shadow .18s ease;
+    box-shadow: 0 1px 2px rgba(18,36,92,0.18);
+  }
+  .btn-primary:hover {
+    background: var(--cobalt-h); transform: translateY(-1px);
+    box-shadow: 0 6px 16px -6px rgba(30,77,216,0.45);
+  }
+  .btn-primary svg { transition: transform .18s ease; }
+  .btn-primary:hover svg { transform: translateX(3px); }
+  .btn-text {
+    font-size: 15px; font-weight: 600; color: var(--ink);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn-text u { text-decoration: none; box-shadow: inset 0 -1px 0 var(--line-2); }
+  .btn-text:hover u { box-shadow: inset 0 -1px 0 var(--cobalt); color: var(--cobalt); }
+
+  /* trust row — concrete specifics carry the conversion weight */
+  .trust {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px;
+    font-size: 13.5px; color: var(--ink-3);
+  }
+  .trust .sep { width: 1px; height: 14px; background: var(--line-2); }
+  .trust b { color: var(--ink); font-weight: 700; }
+  .pay { display: inline-flex; align-items: center; gap: 8px; }
+  .pay-chip {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+    border: 1px solid var(--line-2); border-radius: 4px;
+    padding: 3px 7px; color: var(--ink-2); background: var(--white);
+  }
+  .trust-amber {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--amber-ink); font-weight: 600;
+  }
+  .trust-amber .d { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+
+  /* ── REAL SLIDE ARTIFACT (the trust core) ───────────── */
+  .stage { position: relative; padding: 10px 6px 6px; }
+
+  .slide {
+    position: relative; background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 1px 1px rgba(11,13,16,0.04), 0 18px 40px -22px rgba(11,13,16,0.30);
+    aspect-ratio: 16 / 9;
+    padding: 26px 28px;
+    display: flex; flex-direction: column;
+  }
+  /* peek slides behind — show "stack of output", real not abstract */
+  .slide.peek-2 {
+    position: absolute; inset: 0;
+    transform: translate(26px, 26px) rotate(2.4deg);
+    z-index: 0; opacity: 0.92;
+  }
+  .slide.peek-3 {
+    position: absolute; inset: 0;
+    transform: translate(46px, 48px) rotate(4.6deg);
+    z-index: -1; opacity: 0.6;
+  }
+  .slide.front { position: relative; z-index: 1; }
+
+  .s-kicker {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--cobalt); margin-bottom: 10px;
+  }
+  .s-rule { width: 38px; height: 3px; border-radius: 2px; background: var(--cobalt); margin-bottom: 14px; }
+  .s-title {
+    font-size: 19px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15;
+    color: var(--ink); margin-bottom: 14px; max-width: 16em;
+  }
+  .s-cols { display: grid; grid-template-columns: 1fr 0.95fr; gap: 20px; align-items: end; flex: 1; }
+  .s-bullets { display: flex; flex-direction: column; gap: 9px; }
+  .s-bullet { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: var(--ink-2); line-height: 1.35; }
+  .s-bullet .tick {
+    flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%;
+    background: rgba(30,77,216,0.10); color: var(--cobalt);
+    display: grid; place-items: center; margin-top: 1px;
+  }
+  /* real bar chart via SVG */
+  .s-chart { align-self: end; }
+  .s-cap { margin-top: 12px; font-size: 10.5px; color: var(--ink-3); }
+
+  .stage-label {
+    margin-top: 22px; text-align: center;
+    font-size: 12.5px; color: var(--ink-3);
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+  }
+  .stage-label svg { color: var(--cobalt); }
+
+  /* ── PROOF STRIP ────────────────────────────────────── */
+  .proof {
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    background: var(--white);
+  }
+  .proof-inner {
+    max-width: var(--maxw); margin: 0 auto; padding: 22px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap;
+  }
+  .trio { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
+  .trio b { color: var(--ink); font-weight: 700; }
+  .trio-ic { display: grid; place-items: center; color: var(--cobalt); flex-shrink: 0; }
+  .proof-logos { display: flex; align-items: center; gap: 10px; }
+
+  /* ── RESPONSIVE ─────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .hero { padding: 56px 0 48px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 48px; }
+    .stage { max-width: 460px; }
+    .nav-tag { display: none; }
+    .proof-inner { justify-content: center; text-align: center; }
+  }
+  @media (max-width: 560px) {
+    .wrap, .nav-inner { padding-left: 20px; padding-right: 20px; }
+    h1 { font-size: clamp(32px, 9vw, 44px); }
+    .lead { font-size: 16px; }
+    .slide.peek-2, .slide.peek-3 { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="brand">Slide<b>maker</b></div>
+      <div class="nav-right">
+        <span class="nav-tag">Презентации за минуту</span>
+        <a class="btn-ghost" href="#order">Заказать</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <main class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+
+        <!-- LEFT: message + CTA + trust -->
+        <div>
+          <span class="eyebrow rise d1"><span class="dot"></span>Генерация ИИ · от ₽599</span>
+          <h1 class="rise d2">Презентация<br>на любую тему —<br><span class="soft">за минуту.</span></h1>
+          <p class="lead rise d3">
+            Опишите тему, задайте срок и стиль. Готовый
+            <b style="color:var(--ink)">.pptx</b> — на почте через 3–5 минут. Открывается
+            в PowerPoint и Google Slides, правьте как хотите.
+          </p>
+
+          <div class="cta-row rise d4">
+            <a class="btn-primary" href="#order">
+              Заказать презентацию
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            </a>
+            <a class="btn-text" href="#examples">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/>
+              </svg>
+              <u>Посмотреть примеры</u>
+            </a>
+          </div>
+
+          <div class="trust rise d4">
+            <span><b>Готово сегодня</b> · 3–5 минут</span>
+            <span class="sep"></span>
+            <span class="pay">
+              Оплата
+              <span class="pay-chip">ЮKassa</span>
+              <span class="pay-chip">МИР</span>
+            </span>
+            <span class="sep"></span>
+            <span class="trust-amber"><span class="d"></span>2 генерации за оплату</span>
+          </div>
+        </div>
+
+        <!-- RIGHT: REAL slide artifact (stacked) -->
+        <div class="stage" style="animation: settle .9s cubic-bezier(.2,.7,.2,1) .18s both" aria-label="Пример слайда из готовой презентации">
+          <!-- peek layers: real content, just dimmed -->
+          <div class="slide peek-3" aria-hidden="true">
+            <div class="s-kicker">Стратегия</div>
+            <div class="s-rule"></div>
+            <div class="s-title">Каналы привлечения клиентов</div>
+          </div>
+          <div class="slide peek-2" aria-hidden="true">
+            <div class="s-kicker">Команда</div>
+            <div class="s-rule"></div>
+            <div class="s-title">Кто отвечает за результат</div>
+          </div>
+
+          <!-- FRONT slide: genuine PowerPoint-style output -->
+          <div class="slide front">
+            <div class="s-kicker">Аналитика · 2024</div>
+            <div class="s-rule"></div>
+            <div class="s-title">Внедрение ИИ в ритейле: рост эффективности на 40%</div>
+            <div class="s-cols">
+              <div class="s-bullets">
+                <div class="s-bullet">
+                  <span class="tick">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                  Сокращение издержек логистики на 18%
+                </div>
+                <div class="s-bullet">
+                  <span class="tick">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                  Персонализация увеличила средний чек
+                </div>
+                <div class="s-bullet">
+                  <span class="tick">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                  Прогноз спроса точнее на 31%
+                </div>
+              </div>
+              <!-- real SVG bar chart -->
+              <div class="s-chart">
+                <svg width="100%" height="92" viewBox="0 0 180 92" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+                  <line x1="0" y1="91" x2="180" y2="91" stroke="#E6E6E1" stroke-width="1"/>
+                  <rect x="6"   y="50" width="26" height="41" rx="2" fill="#C9D4F6"/>
+                  <rect x="44"  y="36" width="26" height="55" rx="2" fill="#9DB2EF"/>
+                  <rect x="82"  y="44" width="26" height="47" rx="2" fill="#C9D4F6"/>
+                  <rect x="120" y="20" width="26" height="71" rx="2" fill="#6E8BE6"/>
+                  <rect x="158" y="8"  width="16" height="83" rx="2" fill="#1E4DD8"/>
+                </svg>
+                <div class="s-cap">Q1 → Q4 · эффективность операций</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stage-label">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+            Реальный слайд из готовой презентации
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- PROOF STRIP — honest, verifiable trust only (no fabricated stats) -->
+  <section class="proof" aria-label="Гарантии">
+    <div class="proof-inner">
+      <div class="trio">
+        <span class="trio-ic" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+        </span>
+        <span><b>Возврат</b>, если файл не пришёл</span>
+      </div>
+      <div class="trio">
+        <span class="trio-ic" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="m3 8 9 5 9-5"/></svg>
+        </span>
+        <span>Доставка на почту за <b>3–5 минут</b></span>
+      </div>
+      <div class="trio">
+        <span class="trio-ic" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        </span>
+        <span>Формат <b>.pptx</b> — PowerPoint и Google Slides</span>
+      </div>
+      <div class="proof-logos">
+        <span class="pay-chip">ЮKassa</span>
+        <span class="pay-chip">МИР</span>
+        <span class="pay-chip">Visa</span>
+        <span class="pay-chip">Mastercard</span>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>

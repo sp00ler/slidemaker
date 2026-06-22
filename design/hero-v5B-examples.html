@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SlideMaker — v5B + real examples (editorial gallery)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+<style>
+  /* v5B + real screenshots. Editorial catalogue: sticky title column +
+     staggered gallery of REAL slides with figure captions. NOT production. */
+  :root{
+    --ink:#14130F; --ink-2:#4A463E; --paper:#F4F1EA; --paper-2:#EDE8DE;
+    --white:#fff; --line:#DAD4C7; --line-s:#C7BFAE; --cobalt:#1E4DD8; --mut:#8A8474;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink-2);
+    font-family:"Inter",system-ui,sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Fraunces",Georgia,serif}
+  img{display:block;max-width:100%}
+
+  .top{display:flex;justify-content:space-between;align-items:baseline;
+    padding:26px 44px;border-bottom:1px solid var(--line)}
+  .brand{font-size:19px;font-weight:600;letter-spacing:-.02em;color:var(--ink)}
+  .top-r{font-size:12.5px;letter-spacing:.06em;color:var(--mut);text-transform:uppercase}
+
+  .hero{display:grid;grid-template-columns:340px 1fr;align-items:stretch}
+
+  .col-l{position:sticky;top:0;align-self:start;padding:64px 40px 64px 44px;
+    border-right:1px solid var(--line);min-height:100vh;display:flex;flex-direction:column}
+  .kick{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin-bottom:28px}
+  h1{margin:0;font-weight:500;color:var(--ink);letter-spacing:-.02em;
+    font-size:clamp(38px,3.6vw,54px);line-height:1.04}
+  h1 em{font-style:italic;color:var(--cobalt)}
+  .lead{margin:24px 0 0;font-size:16px;color:var(--ink-2);max-width:30ch}
+  .meta-list{margin:34px 0 0;border-top:1px solid var(--line)}
+  .meta-list div{display:flex;justify-content:space-between;padding:11px 0;
+    border-bottom:1px solid var(--line);font-size:13.5px;color:var(--ink-2)}
+  .meta-list b{color:var(--ink);font-weight:600}
+  .cta{margin-top:auto;padding-top:34px}
+  .cta a{display:inline-flex;align-items:center;gap:11px;background:var(--cobalt);color:#fff;
+    font-size:15.5px;font-weight:600;padding:14px 24px;border-radius:6px;text-decoration:none;
+    transition:transform .2s,box-shadow .2s}
+  .cta a:hover{transform:translateY(-2px);box-shadow:0 12px 28px -12px rgba(30,77,216,.6)}
+  .cta .note{display:block;margin-top:12px;font-size:12.5px;color:var(--mut)}
+
+  .gallery{padding:56px 56px 72px;display:grid;grid-template-columns:1fr 1fr;gap:44px 48px;align-content:start}
+  figure{margin:0}
+  figure.wide{grid-column:1 / -1}
+  .figcap{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 12px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .figcap .n{font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums}
+  .figcap .t{font-size:13px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  figure:nth-child(3){margin-top:46px}
+  figure:nth-child(5){margin-top:-26px}
+
+  .shot{background:var(--white);border:1px solid var(--line);border-radius:4px;padding:8px;
+    box-shadow:0 1px 0 var(--paper-2),0 18px 36px -26px rgba(20,19,15,.4);
+    transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s}
+  figure:hover .shot{transform:translateY(-6px);box-shadow:0 30px 50px -30px rgba(20,19,15,.5)}
+  .shot img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#fff;border-radius:3px}
+  .wide .shot img{aspect-ratio:21/9}
+  .fignote{margin:11px 2px 0;font-size:13px;color:var(--ink-2);line-height:1.5}
+
+  @media (max-width:1080px){.gallery{grid-template-columns:1fr;gap:40px}
+    figure:nth-child(n){margin-top:0}}
+  @media (max-width:900px){.hero{grid-template-columns:1fr}
+    .col-l{position:static;min-height:auto;border-right:0;border-bottom:1px solid var(--line)}
+    .cta{margin-top:30px}.gallery{padding:40px 28px 56px}}
+  @media (max-width:560px){.top{padding:20px}.col-l{padding:40px 24px}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">Slidemaker</div>
+    <div class="top-r">Каталог готовых слайдов · ИИ</div>
+  </div>
+
+  <div class="hero">
+    <aside class="col-l">
+      <div class="kick">Презентации под задачу</div>
+      <h1 class="serif">Не шаблон.<br><em>Готовая</em><br>презентация.</h1>
+      <p class="lead">Бизнес, учёба, техника, наука — опишите тему, и ИИ соберёт структуру, заголовки и графику.</p>
+      <div class="meta-list">
+        <div><span>Срок</span><b>3–5 минут</b></div>
+        <div><span>Формат</span><b>.pptx</b></div>
+        <div><span>Оплата</span><b>ЮKassa · МИР</b></div>
+        <div><span>Цена</span><b>от ₽599</b></div>
+      </div>
+      <div class="cta">
+        <a href="#">Заказать презентацию
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <span class="note">Возврат, если файл не пришёл · 2 генерации за оплату</span>
+      </div>
+    </aside>
+
+    <div class="gallery">
+      <!-- 01 · 3.png business -->
+      <figure>
+        <figcaption class="figcap"><span class="t">Бизнес-аналитика</span><span class="n">01 / 05</span></figcaption>
+        <div class="shot"><img src="../public/examples/3.png" alt="Предпосылки автоматизации: экономика проблемы" loading="lazy" /></div>
+        <p class="fignote">Данные как аргумент — слайд продаёт идею, а не просто показывает цифры.</p>
+      </figure>
+
+      <!-- 02 · 1.png architecture -->
+      <figure>
+        <figcaption class="figcap"><span class="t">Техническая архитектура</span><span class="n">02 / 05</span></figcaption>
+        <div class="shot"><img src="../public/examples/1.png" alt="Архитектура и логика работы AI-ассистента" loading="lazy" /></div>
+        <p class="fignote">Логика системы — структурно и читаемо, без визуального хаоса.</p>
+      </figure>
+
+      <!-- 03 · 2.png infrastructure — WIDE hero of the gallery (strongest asset) -->
+      <figure class="wide">
+        <figcaption class="figcap"><span class="t">Инфраструктурные схемы — ключевой пример</span><span class="n">03 / 05</span></figcaption>
+        <div class="shot"><img src="../public/examples/2.png" alt="Архитектура виртуального стенда" loading="lazy" /></div>
+        <p class="fignote">Чистая визуализация инфраструктуры: узлы, связи и подписи читаются с первого взгляда.</p>
+      </figure>
+
+      <!-- 04 · 4.png science -->
+      <figure>
+        <figcaption class="figcap"><span class="t">Учебные и научные темы</span><span class="n">04 / 05</span></figcaption>
+        <div class="shot"><img src="../public/examples/4.png" alt="Что такое механочувствительность" loading="lazy" /></div>
+        <p class="fignote">Научное понятие объяснено просто — для лекции, урока и защиты.</p>
+      </figure>
+
+      <!-- 05 · 5.png photo+structure -->
+      <figure>
+        <figcaption class="figcap"><span class="t">Фото + структура</span><span class="n">05 / 05</span></figcaption>
+        <div class="shot"><img src="../public/examples/5.png" alt="Обслуживание и заключение по жёстким дискам" loading="lazy" /></div>
+        <p class="fignote">Фотографии и структурированный текст на одном слайде — наглядно и по делу.</p>
+      </figure>
+    </div>
+  </div>
+</body>
+</html>

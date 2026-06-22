@@ -241,6 +241,7 @@ export async function generateDeck(params: {
   slideCount: number;
   wishes?: string | null;
   storyboard?: string | null;
+  variantHint?: string;
 }): Promise<Deck> {
   const { topic, slideCount } = params;
   const style = (params.style as StyleId) in STYLES ? (params.style as StyleId) : "business";
@@ -254,6 +255,7 @@ export async function generateDeck(params: {
     slideCount,
     wishes: params.wishes,
     storyboard: params.storyboard,
+    variantHint: params.variantHint,
   });
 
   const response = await client.messages.create({
@@ -335,14 +337,16 @@ export function buildDeckPrompt(params: {
   slideCount: number;
   wishes?: string | null;
   storyboard?: string | null;
+  variantHint?: string;
 }): string {
   const userBlocks = buildUserBlocks(params.slideCount, params.wishes, params.storyboard);
+  const variantLine = params.variantHint ? `\n${params.variantHint}\n` : "";
 
   return `Создай структуру презентации.
 Тема: "${params.topic}"
 Стиль оформления: ${params.styleLabel} (${params.styleHint})
 Количество слайдов: ровно ${params.slideCount}.
-${userBlocks}
+${userBlocks}${variantLine}
 
 Требования:
 - Первый слайд — титульный (layout "title"): heading = название темы, subheading = краткий подзаголовок, bullets = [].

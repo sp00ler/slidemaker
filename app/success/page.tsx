@@ -64,7 +64,7 @@ export default function SuccessPage() {
       <div className="success-shell">
         {(status === "loading" || status === "pending" || status === "generating") && (
           <div className="success-overlay">
-            <div className="spinner" />
+            <div className="sm-loader" aria-label="Загрузка" role="status" />
             <div className="success-title">Готовим вашу презентацию…</div>
             <div className="success-sub">
               Это занимает до минуты. Ссылка также придёт на почту — страницу можно закрыть.
@@ -74,7 +74,11 @@ export default function SuccessPage() {
 
         {status === "done" && (
           <div className="success-overlay">
-            <div className="success-icon">✅</div>
+            <div className="success-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </div>
             <div className="success-title">Оплата прошла!</div>
             <div className="success-sub">Генерируем вашу презентацию. Файл придёт на почту.</div>
             <div className="success-steps">
@@ -96,7 +100,11 @@ export default function SuccessPage() {
 
         {status === "awaiting_manual" && (
           <div className="success-overlay">
-            <div className="success-icon author">✍️</div>
+            <div className="success-icon author" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+              </svg>
+            </div>
             <div className="success-title">Оплата прошла!</div>
             <div className="success-sub">Дизайнер приступит после получения вашего файла</div>
             <div className="success-steps">

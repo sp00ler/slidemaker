@@ -23,6 +23,29 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Удаляет .pptx старше TTL по mtime. Чистит истёкшие основные файлы и
+// orphan-файлы варианта 2 (их нет в БД). mtime>TTL == ссылка уже истекла.
+async function sweepOldDownloads(dir: string, ttlDays: number): Promise<void> {
+  try {
+    const cutoff = Date.now() - ttlDays * 24 * 60 * 60 * 1000;
+    const entries = await fs.readdir(dir).catch(() => [] as string[]);
+    await Promise.all(
+      entries.map(async (name) => {
+        if (!name.endsWith(".pptx")) return;
+        const fp = path.join(dir, name);
+        try {
+          const st = await fs.stat(fp);
+          if (st.mtimeMs < cutoff) await fs.rm(fp, { force: true });
+        } catch {
+          // файл исчез/недоступен — пропускаем
+        }
+      })
+    );
+  } catch {
+    // чистка best-effort, не влияет на заказ
+  }
+}
+
 function buildFileName(email: string): string {
   const safeEmail = email
     .toLowerCase()
@@ -93,6 +116,8 @@ export async function processOrder(order: OrderRow): Promise<void> {
     }
   }
 
+  await sweepOldDownloads(dir, env.DOWNLOADS_TTL_DAYS);
+
   try {
     await fs.mkdir(dir, { recursive: true });
     const slideImages = new Map(
@@ -102,7 +127,20 @@ export async function processOrder(order: OrderRow): Promise<void> {
       ])
     );
 
-    // Вариант 1 — обязателен, с ретраем
+    // Вариант 2 запускаем сразу — параллельно варианту 1 (best-effort).
+    const deck2Promise = generateDeck({
+      ...baseParams,
+      variantHint:
+        "Сделай альтернативный вариант: иная структура, порядок и подача, чтобы заметно отличался от первого.",
+    }).catch((e) => {
+      console.warn("order variant 2 generation failed:", {
+        orderId: order.id,
+        error: getErrorMessage(e),
+      });
+      return null;
+    });
+
+    // Вариант 1 — обязателен, с ретраем.
     let deck1: Deck | undefined;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -123,27 +161,25 @@ export async function processOrder(order: OrderRow): Promise<void> {
     await buildPptx(deck1, order.style, outPath, slideImages, await safeVisuals(deck1));
     await markDone(order.id, fileRel);
 
-    // Вариант 2 — «2 генерации за оплату». Best-effort: сбой не валит заказ.
-    try {
-      const deck2 = await generateDeck({
-        ...baseParams,
-        variantHint:
-          "Сделай альтернативный вариант: иная структура, порядок и подача, чтобы заметно отличался от первого.",
-      });
-      const fileName2 = buildFileName(order.email);
-      await buildPptx(
-        deck2,
-        order.style,
-        path.join(dir, fileName2),
-        slideImages,
-        await safeVisuals(deck2)
-      );
-      secondUrl = `${env.APP_URL}/api/download/${fileName2}`;
-    } catch (e) {
-      console.warn("order variant 2 failed, delivering single deck:", {
-        orderId: order.id,
-        error: getErrorMessage(e),
-      });
+    // Достраиваем вариант 2, если сгенерировался («2 генерации за оплату»).
+    const deck2 = await deck2Promise;
+    if (deck2) {
+      try {
+        const fileName2 = buildFileName(order.email);
+        await buildPptx(
+          deck2,
+          order.style,
+          path.join(dir, fileName2),
+          slideImages,
+          await safeVisuals(deck2)
+        );
+        secondUrl = `${env.APP_URL}/api/download/${fileName2}`;
+      } catch (e) {
+        console.warn("order variant 2 build failed, delivering single deck:", {
+          orderId: order.id,
+          error: getErrorMessage(e),
+        });
+      }
     }
   } catch (e) {
     await markError(order.id).catch(() => {});

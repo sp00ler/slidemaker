@@ -11,9 +11,6 @@ import {
 } from "react";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
 
-const HERO_VIDEOS = ["/hero1.mp4", "/hero2.mp4", "/hero3.mp4"];
-const HERO_FADE_MS = 800;
-
 const WISHES_MAX = 500;
 const AUTHOR_EMAIL = "custom@slidemaker.ru";
 const MAX_UPLOAD_SLIDES = 15;
@@ -80,10 +77,24 @@ const tariffFeatures: Record<Tariff["id"], string[]> = {
   ],
 };
 
-const styleIcons: Record<StyleId, string> = {
-  business: "🏢",
-  creative: "🎨",
-  minimal: "◻️",
+const styleIcons: Record<StyleId, JSX.Element> = {
+  business: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="3" width="16" height="18" rx="1" />
+      <path d="M9 7h2M9 11h2M9 15h2M14 7h1M14 11h1M14 15h1" />
+    </svg>
+  ),
+  creative: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M6.3 6.3l2 2M15.7 15.7l2 2M17.7 6.3l-2 2M8.3 15.7l-2 2" />
+    </svg>
+  ),
+  minimal: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M9 12h6" />
+    </svg>
+  ),
 };
 
 const styleDescriptions: Record<StyleId, string> = {
@@ -139,9 +150,6 @@ export default function Home() {
   const [unlockedSlide, setUnlockedSlide] = useState(1);
   const formRef = useRef<HTMLDivElement>(null);
   const slotsRef = useRef(slots);
-  const videoARef = useRef<HTMLVideoElement>(null);
-  const videoBRef = useRef<HTMLVideoElement>(null);
-  const videoIdxRef = useRef(0);
 
   const tariff = TARIFFS[tariffId];
   const isAuthor = Boolean(tariff.manual);
@@ -163,55 +171,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const a = videoARef.current;
-    const b = videoBRef.current;
-    if (!a || !b) return;
-
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    a.src = HERO_VIDEOS[0];
-    a.style.opacity = "1";
-    b.style.opacity = "0";
-    void a.play();
-
-    if (reducedMotion) return;
-
-    // preload next clip into standby
-    b.src = HERO_VIDEOS[1 % HERO_VIDEOS.length];
-    b.load();
-
-    let active = a;
-    let standby = b;
-
-    function crossfade() {
-      videoIdxRef.current = (videoIdxRef.current + 1) % HERO_VIDEOS.length;
-      void standby.play().then(() => {
-        standby.style.transition = `opacity ${HERO_FADE_MS}ms ease`;
-        active.style.transition = `opacity ${HERO_FADE_MS}ms ease`;
-        standby.style.opacity = "1";
-        active.style.opacity = "0";
-
-        const prev = active;
-        active = standby;
-        standby = prev;
-
-        const preloadIdx = (videoIdxRef.current + 1) % HERO_VIDEOS.length;
-        standby.src = HERO_VIDEOS[preloadIdx];
-        standby.load();
-
-        active.addEventListener("ended", crossfade, { once: true });
-      });
-    }
-
-    a.addEventListener("ended", crossfade, { once: true });
-
-    return () => {
-      a.removeEventListener("ended", crossfade);
-      b.removeEventListener("ended", crossfade);
-    };
-  }, []);
-
-  useEffect(() => {
     const elements = Array.from(document.querySelectorAll<HTMLElement>(".reveal, .reveal-stagger"));
     if (!elements.length) return;
 
@@ -229,6 +188,38 @@ export default function Home() {
 
     elements.forEach((element) => observer.observe(element));
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const deck = document.getElementById("hero-deck");
+    const wrap = deck?.parentElement;
+    if (!deck || !wrap) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const mobile = window.matchMedia("(max-width:980px)").matches;
+    const base = mobile ? "translateX(-50%) " : "";
+    let raf = 0;
+    deck.style.transform = `${base}rotateY(-8deg) rotateX(3deg)`;
+
+    function onMove(e: PointerEvent) {
+      const r = wrap!.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        deck!.style.transform = `${base}rotateY(${-x * 10}deg) rotateX(${y * 8}deg)`;
+      });
+    }
+    function onLeave() {
+      deck!.style.transform = `${base}rotateY(-8deg) rotateX(3deg)`;
+    }
+    wrap.addEventListener("pointermove", onMove);
+    wrap.addEventListener("pointerleave", onLeave);
+    return () => {
+      cancelAnimationFrame(raf);
+      wrap.removeEventListener("pointermove", onMove);
+      wrap.removeEventListener("pointerleave", onLeave);
+    };
   }, []);
 
   useEffect(() => {
@@ -333,59 +324,85 @@ export default function Home() {
         </nav>
 
         <section className="hero">
-          <video ref={videoARef} className="hero-video" muted playsInline aria-hidden="true" />
-          <video ref={videoBRef} className="hero-video" muted playsInline aria-hidden="true" />
-          <div className="hero-overlay" aria-hidden="true" />
+          <div className="hero-rule" />
+          <div className="hero-meta">
+            <span>ИИ-презентации для бизнеса, учёбы и техники · .pptx</span>
+            <span className="em">Готово сегодня · 3–5 минут</span>
+          </div>
           <div className="hero-inner">
             <div className="hero-text">
-              <div className="hero-badge">ИИ-генерация · Оплата ЮКассой</div>
-              <h1>Презентация на любую тему — <span className="grad">за минуту</span></h1>
+              <h1>
+                <span>Слайды</span>
+                <br />
+                <span className="out">на любую</span>
+                <br />
+                <span>тему.</span> <span className="hero-accent">за минуту</span>
+              </h1>
               <p>
-                Опишите тему, выберите стиль и количество слайдов. Готовый .pptx
-                придёт на почту сразу после оплаты.
+                Бизнес, учёба, техника, наука — опишите тему, и ИИ соберёт структуру,
+                заголовки и графику. <b>Готовый .pptx</b> придёт на почту. Правьте в
+                PowerPoint, если надо.
               </p>
-              <div className="hero-gens-badge">
-                <span className="dot" />
-                <span>2 генерации за оплату · вторая в подарок</span>
-              </div>
               <div className="hero-cta-row">
                 <button className="hero-cta" type="button" onClick={scrollToForm}>
-                  Заказать презентацию →
+                  Собрать презентацию →
                 </button>
-                <span className="hero-note">от 299 ₽ · 3–5 мин</span>
+                <span className="hero-price">от {TARIFFS.basic.price} ₽</span>
+              </div>
+              <div className="chips" style={{ marginTop: "26px" }}>
+                <span className="chip"><b>3–5 минут</b> до файла</span>
+                <span className="chip">Формат <b>.pptx</b></span>
+                <span className="chip">ЮKassa · МИР</span>
+                <span className="chip amber"><b>2 генерации</b> за оплату</span>
               </div>
             </div>
-            <div className="hero-preview" aria-hidden="true">
-              <div className="slide-preview-wrap">
-                <div className="slide-badge badge-ai">
-                  <span className="badge-icon">⚡</span>
-                  <span>Готово за <span className="badge-s">3 мин</span></span>
-                </div>
-                <div className="slide-mock">
-                  <div className="slide-mock-kicker">Slidemaker · AI Generated</div>
-                  <div className="slide-mock-bar" />
-                  <div className="slide-mock-title">
-                    Внедрение ИИ в розничной торговле<br />Стратегическая презентация Q4
-                  </div>
-                  <div className="slide-mock-lines">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                  <div className="slide-mock-chart">
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                </div>
-                <div className="slide-badge badge-time">
-                  <span className="badge-icon">📬</span>
-                  <span>На <span className="badge-s">email</span> сразу</span>
+
+            <div className="deckwrap">
+              <div className="deck" id="hero-deck" aria-label="Реальные слайды из готовых презентаций">
+                <div className="scard back2"><img src="/examples/1.png" alt="" /></div>
+                <div className="scard back1"><img src="/examples/3.png" alt="" /></div>
+                <div className="scard front">
+                  <div className="deck-badge">2 генерации</div>
+                  <img src="/examples/2.png" alt="Пример слайда: техническая архитектура виртуального стенда" />
                 </div>
               </div>
+              <div className="deck-cap">Наведи — слайд оживает · <em>реальный результат</em></div>
             </div>
+          </div>
+        </section>
+
+        <div className="ticker" aria-hidden="true">
+          <div className="ticker-track">
+            <span>Бизнес-аналитика</span><span>Техническая архитектура</span><span>Защита диплома</span><span>Научный доклад</span><span>Питч стартапа</span><span>Квартальный отчёт</span>
+            <span>Бизнес-аналитика</span><span>Техническая архитектура</span><span>Защита диплома</span><span>Научный доклад</span><span>Питч стартапа</span><span>Квартальный отчёт</span>
+          </div>
+        </div>
+
+        <section className="examples-section reveal">
+          <div className="container">
+            <div className="ex-head">
+              <h2 className="poster">Реальные слайды,<br /><span className="out">не заглушки.</span></h2>
+              <p>Пять задач — бизнес, техника, наука, учёба. Показываем диапазон, а не количество. <span className="idx">01—05</span></p>
+            </div>
+
+            {[
+              { n: "01", cat: "Бизнес", img: "/examples/3.png", t1: "Бизнес-", t2: "аналитика", alt: "Предпосылки автоматизации: экономика проблемы", desc: "Данные и экономический аргумент как история — слайд продаёт идею, а не просто показывает цифры." },
+              { n: "02", cat: "Техника", img: "/examples/1.png", t1: "Техническая", t2: "архитектура", alt: "Архитектура и логика работы AI-ассистента", desc: "Сложная схема и логика системы — структурно и читаемо, без визуального хаоса." },
+              { n: "03", cat: "Инфраструктура", img: "/examples/2.png", t1: "Инфра-", t2: "структурные схемы", alt: "Архитектура виртуального стенда", desc: "Чистая визуализация инфраструктуры — узлы и связи понятны с первого взгляда." },
+              { n: "04", cat: "Наука · учёба", img: "/examples/4.png", t1: "Учебные и", t2: "научные темы", alt: "Что такое механочувствительность", desc: "Научное понятие объяснено просто — для лекции, урока и защиты диплома." },
+              { n: "05", cat: "Фото + текст", img: "/examples/5.png", t1: "Фото и", t2: "структура", alt: "Обслуживание и заключение по жёстким дискам", desc: "Фотографии и структурированный текст на одном слайде — наглядно и по делу." },
+            ].map((ex) => (
+              <div className="ex-row" key={ex.n}>
+                <div className="ex-meta">
+                  <div className="row-idx"><span className="n">{ex.n}</span><span className="cat">{ex.cat}</span></div>
+                  <h3>{ex.t1}<br /><span className="out">{ex.t2}</span></h3>
+                  <p>{ex.desc}</p>
+                </div>
+                <div className="ex-media">
+                  <div className="frame"><img src={ex.img} alt={ex.alt} loading="lazy" /></div>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -468,7 +485,12 @@ export default function Home() {
               <form className="card" onSubmit={handleSubmit}>
                 {error && (
                   <div className="alert alert-error">
-                    <span className="alert-icon">⚠️</span>
+                    <span className="alert-icon" aria-hidden="true">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <path d="M12 9v4M12 17h.01" />
+                      </svg>
+                    </span>
                     <div>{error}</div>
                   </div>
                 )}
@@ -564,14 +586,22 @@ export default function Home() {
                 )}
 
                 {!isAuthor && uploadToken && (
-                  <SlideUploader
-                    slideCount={slideCount}
-                    uploadToken={uploadToken}
-                    slots={slots}
-                    setSlots={setSlots}
-                    unlockedSlide={unlockedSlide}
-                    setUnlockedSlide={setUnlockedSlide}
-                  />
+                  <details className="details-field">
+                    <summary>
+                      + Добавить свои картинки к слайдам (необязательно)
+                      <span>▼</span>
+                    </summary>
+                    <div className="disclosure-body">
+                      <SlideUploader
+                        slideCount={slideCount}
+                        uploadToken={uploadToken}
+                        slots={slots}
+                        setSlots={setSlots}
+                        unlockedSlide={unlockedSlide}
+                        setUnlockedSlide={setUnlockedSlide}
+                      />
+                    </div>
+                  </details>
                 )}
 
                 {isAuthor && (
@@ -685,7 +715,7 @@ function SlideUploader({
   unlockedSlide: number;
   setUnlockedSlide: Dispatch<SetStateAction<number>>;
 }) {
-  const visibleCount = Math.min(unlockedSlide, slideCount);
+  const visibleCount = slideCount;
 
   function updateSlot(slotNumber: number, next: UploadSlotState) {
     setSlots((current) => {
@@ -901,7 +931,12 @@ function UploadSlot({
           </div>
         ) : slot.status === "text-only" ? (
           <div className="slide-text-only">
-            <span>📝</span>
+            <span aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6M9 13h6M9 17h4" />
+              </svg>
+            </span>
             <span>Без изображения</span>
             <label className="slide-action">
               добавить фото

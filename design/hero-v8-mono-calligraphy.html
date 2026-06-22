@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SlideMaker — v8 · mono + calligraphy (B/W, color on hover)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet" />
+<style>
+  /* v8 — base v5A (light), monochrome. Calligraphy ACCENT only.
+     Slides grayscale at rest → real color on hover. Touch devices
+     (no hover) show color always (proof must survive mobile).
+     Color (cobalt/amber) emerges only on interaction. NOT production. */
+  :root{
+    --ink:#0B0D10; --ink-2:#3A4048; --ink-3:#6B6F76; --paper:#FAFAF8;
+    --paper-2:#EFEEE9; --white:#fff; --line:#E0DED7; --line-2:#CFCDC4;
+    --cobalt:#1E4DD8; --amber:#F59E0B; --amber-ink:#231a05;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink-2);
+    font-family:"Inter",system-ui,sans-serif;font-size:16px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  img{display:block;max-width:100%}
+  .mono{font-variant-numeric:tabular-nums}
+  .script{font-family:"Caveat",cursive}
+
+  .top{display:flex;justify-content:space-between;align-items:center;
+    padding:22px 40px;border-bottom:1px solid var(--line)}
+  .brand{font-weight:900;font-size:19px;letter-spacing:-.04em;color:var(--ink)}
+  .top-meta{font-size:12px;color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase}
+
+  .hero{position:relative;min-height:calc(100vh - 66px);display:grid;
+    grid-template-columns:1.05fr .95fr;align-items:center;padding:48px 40px 0;gap:24px}
+  /* faint engineering grid, greyscale */
+  .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(11,13,16,.05) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(11,13,16,.05) 1px,transparent 1px);
+    background-size:100% 96px,calc(100%/6) 100%;
+    -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent)}
+
+  .col-l{position:relative;z-index:3}
+  .idx{display:flex;gap:14px;align-items:center;margin-bottom:24px}
+  .idx .n{font-size:12px;color:var(--ink);font-weight:800}
+  .idx .l{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  .h1-wrap{position:relative;display:inline-block}
+  h1{margin:0;color:var(--ink);font-weight:900;letter-spacing:-.055em;line-height:.94;
+    font-size:clamp(46px,7vw,100px);text-transform:uppercase}
+  h1 .out{color:transparent;-webkit-text-stroke:2px var(--ink)}
+  /* calligraphy accent — annotation, not the headline */
+  .accent{position:absolute;right:-6px;top:-46px;font-size:clamp(40px,5vw,72px);
+    font-weight:700;color:var(--ink);transform:rotate(-7deg);line-height:1;pointer-events:none}
+  .accent::after{content:"";position:absolute;left:4%;right:8%;bottom:-6px;height:3px;
+    background:var(--ink);border-radius:2px;transform:rotate(1.5deg)}
+
+  .sub{margin:30px 0 0;max-width:30em;font-size:18px;color:var(--ink-2)}
+  .sub b{color:var(--ink);font-weight:700}
+
+  .cta-wrap{display:flex;align-items:center;gap:22px;margin-top:32px;flex-wrap:wrap}
+  /* mono CTA — black; color emerges on hover */
+  .cta{display:inline-flex;align-items:center;gap:12px;background:var(--ink);color:#fff;
+    font-size:16px;font-weight:700;padding:16px 28px;border:0;border-radius:8px;cursor:pointer;
+    text-decoration:none;transition:transform .2s,box-shadow .2s,background .2s}
+  .cta:hover{background:var(--cobalt);transform:translateY(-2px);
+    box-shadow:0 16px 38px -14px rgba(30,77,216,.55)}
+  .cta svg{transition:transform .2s}.cta:hover svg{transform:translateX(4px)}
+  .price{display:flex;flex-direction:column;line-height:1.1}
+  .price .v{font-size:28px;font-weight:900;color:var(--ink);letter-spacing:-.04em}
+  .price .k{font-size:12px;color:var(--ink-3)}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:var(--white);
+    border:1px solid var(--line-2);border-radius:999px;padding:7px 13px;font-size:12.5px;
+    color:var(--ink-2);transition:border-color .2s,color .2s}
+  .chip b{color:var(--ink)}.chip svg{color:var(--ink)}
+  .chip:hover{border-color:var(--ink)}
+  .chip.amber:hover{border-color:var(--amber);color:var(--amber-ink)}
+  .chip.amber:hover svg{color:var(--amber)}
+
+  .rail{position:absolute;left:40px;right:40px;bottom:0;z-index:3;display:flex;
+    border-top:1px solid var(--line)}
+  .rail div{flex:1;padding:18px 4px;border-right:1px solid var(--line);font-size:13px;color:var(--ink-2)}
+  .rail div:last-child{border-right:0}.rail b{color:var(--ink);font-weight:700}
+
+  /* 3D deck — mono at rest, color on hover */
+  .col-r{position:relative;z-index:2;perspective:1600px;height:100%}
+  .deck{position:absolute;top:50%;left:50%;width:min(580px,47vw);transform:translate(-50%,-50%);
+    transform-style:preserve-3d;transition:transform .15s ease-out}
+  .scard{position:absolute;inset:0;background:var(--white);border-radius:14px;padding:10px;
+    box-shadow:0 40px 80px -34px rgba(11,13,16,.45),0 0 0 1px var(--line)}
+  .scard img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#fff;border-radius:7px;
+    filter:grayscale(1) contrast(1.04);transition:filter .45s ease}
+  .scard.back2{transform:translateZ(-90px) translateY(42px) scale(.95);opacity:.5}
+  .scard.back1{transform:translateZ(-45px) translateY(21px) scale(.975);opacity:.8}
+  .scard.front{position:relative}
+  /* hover anywhere on deck → front slide gains real color */
+  .deck:hover .scard.front img{filter:none}
+  .badge3d{position:absolute;top:-14px;right:-14px;z-index:4;background:var(--ink);color:#fff;
+    font-size:12px;font-weight:800;padding:7px 13px;border-radius:8px;transform:translateZ(60px);
+    transition:background .3s}
+  .deck:hover .badge3d{background:var(--amber);color:var(--amber-ink)}
+  .deck-cap{position:absolute;left:50%;bottom:-34px;transform:translateX(-50%);white-space:nowrap;
+    font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:7px}
+  .deck-cap em{font-style:normal;color:var(--ink);font-weight:600}
+
+  /* TOUCH (no hover): show color always — proof must survive mobile */
+  @media (hover:none){
+    .scard img{filter:none!important}
+    .badge3d{background:var(--amber);color:var(--amber-ink)}
+  }
+
+  @media (max-width:980px){
+    .hero{grid-template-columns:1fr;min-height:auto;padding:36px 24px 120px}
+    .col-r{height:64vw;margin-top:30px}.deck{width:min(560px,88vw)}
+    .accent{top:-38px;font-size:clamp(36px,9vw,56px)}
+    .rail{position:static;margin-top:40px;flex-wrap:wrap}
+    .rail div{flex:1 1 50%;border-bottom:1px solid var(--line)}.hero::before{display:none}
+  }
+  @media (max-width:560px){.top{padding:18px 20px}.top-meta{display:none}.rail div{flex:1 1 100%}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">Slidemaker</div>
+    <div class="top-meta">ИИ-презентации · от ₽599</div>
+  </div>
+
+  <section class="hero">
+    <div class="col-l">
+      <div class="idx"><span class="n mono">01</span><span class="l">Бизнес · учёба · техника · наука</span></div>
+      <div class="h1-wrap">
+        <h1><span>Слайды</span><br><span class="out">на любую</span><br><span>тему.</span></h1>
+        <span class="accent script">за минуту</span>
+      </div>
+      <p class="sub">Опишите тему — ИИ соберёт структуру, заголовки и графику. <b>Готовый .pptx</b> на почте через 3–5 минут.</p>
+      <div class="cta-wrap">
+        <a class="cta" href="#">Собрать презентацию
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <div class="price"><span class="v">₽599</span><span class="k">за презентацию</span></div>
+      </div>
+      <div class="chips">
+        <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> <b>3–5 минут</b></span>
+        <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> <b>.pptx</b></span>
+        <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> ЮKassa · МИР</span>
+        <span class="chip amber"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> 2 генерации</span>
+      </div>
+    </div>
+
+    <div class="col-r">
+      <div class="deck" id="deck" aria-label="Реальные слайды из готовых презентаций">
+        <div class="scard back2"><img src="../public/examples/1.png" alt="" /></div>
+        <div class="scard back1"><img src="../public/examples/3.png" alt="" /></div>
+        <div class="scard front">
+          <div class="badge3d">2 генерации</div>
+          <img src="../public/examples/2.png" alt="Пример слайда: техническая архитектура виртуального стенда" />
+        </div>
+        <div class="deck-cap">Наведи — слайд оживает · <em>реальный результат</em></div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div>Срок <b>сегодня</b> · 3–5 мин</div>
+      <div>Оплата <b>ЮKassa · МИР</b></div>
+      <div>Формат <b>.pptx</b></div>
+      <div>Возврат <b>если не пришёл</b></div>
+    </div>
+  </section>
+
+  <!-- EXAMPLES — mono grid, color on hover (touch = always color) -->
+  <section style="max-width:1280px;margin:0 auto;padding:80px 40px 90px">
+    <div style="border-top:2px solid var(--ink);display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;padding-top:22px;margin-bottom:34px">
+      <h2 style="margin:0;font-size:clamp(30px,4vw,52px);font-weight:900;letter-spacing:-.045em;text-transform:uppercase;color:var(--ink);line-height:1.0">Реальные слайды.<br><span class="script" style="text-transform:none;font-weight:700;font-size:.72em">наведи — оживут</span></h2>
+      <p style="margin:0;max-width:32ch;font-size:15px;color:var(--ink-2)">Пять задач — бизнес, техника, наука, учёба. В покое — графика, под курсором — цвет.</p>
+    </div>
+
+    <div class="exg" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+      <figure class="exc" style="margin:0">
+        <div class="exf"><span class="exl">Бизнес-аналитика</span><img src="../public/examples/3.png" alt="Предпосылки автоматизации: экономика проблемы" loading="lazy" /></div>
+      </figure>
+      <figure class="exc" style="margin:0">
+        <div class="exf"><span class="exl">Техническая архитектура</span><img src="../public/examples/1.png" alt="Архитектура и логика работы AI-ассистента" loading="lazy" /></div>
+      </figure>
+      <figure class="exc" style="margin:0">
+        <div class="exf"><span class="exl">Инфраструктурные схемы</span><img src="../public/examples/2.png" alt="Архитектура виртуального стенда" loading="lazy" /></div>
+      </figure>
+      <figure class="exc" style="margin:0">
+        <div class="exf"><span class="exl">Учебные и научные темы</span><img src="../public/examples/4.png" alt="Что такое механочувствительность" loading="lazy" /></div>
+      </figure>
+      <figure class="exc" style="margin:0;grid-column:span 2">
+        <div class="exf"><span class="exl">Фото + структура</span><img src="../public/examples/5.png" alt="Обслуживание и заключение по жёстким дискам" loading="lazy" /></div>
+      </figure>
+    </div>
+  </section>
+
+  <style>
+    .exf{position:relative;background:var(--white);border:1px solid var(--line);border-radius:12px;
+      padding:10px;box-shadow:0 18px 40px -30px rgba(11,13,16,.4);
+      transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s}
+    .exf img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#fff;border-radius:6px;
+      filter:grayscale(1) contrast(1.04);transition:filter .45s ease}
+    .exf:hover{transform:translateY(-5px);box-shadow:0 30px 50px -30px rgba(11,13,16,.5)}
+    .exf:hover img{filter:none}
+    .exl{position:absolute;top:18px;left:18px;z-index:2;background:var(--ink);color:#fff;
+      font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+      padding:5px 10px;border-radius:6px}
+    @media (hover:none){.exf img{filter:none!important}}
+    @media (max-width:900px){.exg{grid-template-columns:1fr 1fr!important}.exc[style*="span 2"]{grid-column:auto!important}}
+    @media (max-width:560px){.exg{grid-template-columns:1fr!important}}
+  </style>
+
+  <script>
+    (function(){
+      var deck=document.getElementById('deck'),hero=document.querySelector('.hero');
+      if(!deck||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+      var rAF;
+      hero.addEventListener('pointermove',function(e){
+        var r=hero.getBoundingClientRect();
+        var x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+        cancelAnimationFrame(rAF);
+        rAF=requestAnimationFrame(function(){
+          deck.style.transform='translate(-50%,-50%) rotateY('+(-x*12)+'deg) rotateX('+(y*10)+'deg)';
+        });
+      });
+      hero.addEventListener('pointerleave',function(){
+        deck.style.transform='translate(-50%,-50%) rotateY(-9deg) rotateX(4deg)';
+      });
+      deck.style.transform='translate(-50%,-50%) rotateY(-9deg) rotateX(4deg)';
+    })();
+  </script>
+</body>
+</html>

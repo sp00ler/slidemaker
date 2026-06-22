@@ -80,11 +80,44 @@ async function photoToImage(v: Visual): Promise<ResolvedVisual | null> {
   };
 }
 
-// Генерация картинки image-моделью. Включается, когда заведёшь провайдера и ключ.
-async function generatedImage(_v: Visual): Promise<ResolvedVisual | null> {
-  // TODO: подключить image-модель (Stability/OpenAI/Imagen) за env-ключом.
-  // Возвращай { kind: "image", data: dataUrl, alt, caption }.
-  return null;
+// Генерация картинки OpenAI Images (gpt-image-1). Включается при OPENAI_API_KEY.
+const IMAGE_GEN_TIMEOUT_MS = 60000; // генерация медленнее обычного fetch
+
+async function generatedImage(v: Visual): Promise<ResolvedVisual | null> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key || !v.image_prompt.trim()) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_GEN_TIMEOUT_MS);
+  try {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-image-1",
+        prompt: v.image_prompt,
+        size: "1536x1024", // landscape под слайд
+        quality: process.env.OPENAI_IMAGE_QUALITY || "medium", // low|medium|high — цена/качество
+        n: 1,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { data?: { b64_json?: string }[] };
+    const b64 = json.data?.[0]?.b64_json;
+    if (!b64) return null;
+    return {
+      kind: "image",
+      data: `data:image/png;base64,${b64}`,
+      alt: v.alt,
+      caption: v.caption,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function resolveVisual(v: Visual): Promise<ResolvedVisual | null> {

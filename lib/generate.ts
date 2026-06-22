@@ -10,6 +10,7 @@ import {
 } from "@/lib/orders";
 import { generateDeck } from "@/lib/anthropic";
 import { buildPptx } from "@/lib/pptx";
+import { resolveDeckVisuals } from "@/lib/visuals";
 import {
   sendAdminOrderEmail,
   sendAuthorCustomerEmail,
@@ -92,8 +93,19 @@ export async function processOrder(order: OrderRow): Promise<void> {
           ])
         );
 
+        // AI-визуалы (mermaid/chart/photo) — best-effort, ошибки не валят заказ
+        let aiVisuals;
+        try {
+          aiVisuals = await resolveDeckVisuals(deck);
+        } catch (e) {
+          console.warn("deck visuals resolve failed, building text-only:", {
+            orderId: order.id,
+            error: getErrorMessage(e),
+          });
+        }
+
         await fs.mkdir(dir, { recursive: true });
-        await buildPptx(deck, order.style, outPath, slideImages);
+        await buildPptx(deck, order.style, outPath, slideImages, aiVisuals);
         break;
       } catch (e) {
         if (attempt === 2) throw e;

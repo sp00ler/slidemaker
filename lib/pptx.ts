@@ -1,6 +1,7 @@
 import path from "path";
 import pptxgen from "pptxgenjs";
 import type { Deck, Slide } from "@/lib/anthropic";
+import type { ResolvedVisual } from "@/lib/visuals";
 
 interface Theme {
   bg: string;
@@ -182,11 +183,85 @@ function renderContent(
   });
 }
 
+function visualRegion(hasBullets: boolean) {
+  return {
+    x: hasBullets ? 7.2 : 2.0,
+    y: 1.85,
+    w: hasBullets ? 5.2 : 9.3,
+    h: hasBullets ? 3.45 : 4.45,
+  };
+}
+
+function addCaption(
+  slide: pptxgen.Slide,
+  t: Theme,
+  text: string,
+  region: { x: number; y: number; w: number; h: number }
+) {
+  if (!text) return;
+  slide.addText(text, {
+    x: region.x,
+    y: region.y + region.h + 0.12,
+    w: region.w,
+    h: 0.45,
+    fontSize: 12,
+    color: t.subText,
+    fontFace: t.font,
+    italic: true,
+    fit: "shrink",
+  });
+}
+
+function renderAiVisual(
+  pptx: pptxgen,
+  slide: pptxgen.Slide,
+  t: Theme,
+  visual: ResolvedVisual,
+  hasBullets: boolean
+) {
+  const region = visualRegion(hasBullets);
+  if (visual.kind === "image") {
+    slide.addImage({ data: visual.data, ...region, altText: visual.alt });
+    addCaption(slide, t, visual.caption, region);
+    return;
+  }
+  // chart — нативный график pptxgenjs
+  const { chart } = visual;
+  const type =
+    chart.kind === "line"
+      ? pptx.ChartType.line
+      : chart.kind === "pie"
+        ? pptx.ChartType.pie
+        : pptx.ChartType.bar;
+  slide.addChart(
+    type,
+    [
+      {
+        name: chart.unit || "Значение",
+        labels: chart.data.map((d) => d.label),
+        values: chart.data.map((d) => d.value),
+      },
+    ],
+    {
+      ...region,
+      chartColors: [t.accent, t.primary, t.heading, t.subText],
+      showLegend: chart.kind === "pie",
+      legendPos: "b",
+      showValue: chart.kind !== "pie",
+      showPercent: chart.kind === "pie",
+      catAxisLabelColor: t.text,
+      valAxisLabelColor: t.text,
+    }
+  );
+  addCaption(slide, t, visual.caption, region);
+}
+
 export async function buildPptx(
   deck: Deck,
   style: string,
   outPath: string,
-  slideImages?: Map<number, SlideImage>
+  slideImages?: Map<number, SlideImage>,
+  aiVisuals?: Map<number, ResolvedVisual>
 ): Promise<void> {
   const theme = THEMES[style] ?? THEMES.business;
 
@@ -200,6 +275,11 @@ export async function buildPptx(
     const slide = pptx.addSlide();
     const image = s.layout === "content" ? slideImages?.get(index + 1) : undefined;
     const resolvedPath = image ? resolveSlideImagePath(image.path) : null;
+    // AI-визуал только если на этот слайд нет загрузки пользователя
+    const aiVisual =
+      s.layout === "content" && !resolvedPath ? aiVisuals?.get(index + 1) : undefined;
+    const bullets = s.bullets.filter((b) => b.trim().length > 0);
+    const hasBullets = bullets.length > 0;
     switch (s.layout) {
       case "title":
         renderTitle(slide, s, theme);
@@ -208,35 +288,17 @@ export async function buildPptx(
         renderSection(slide, s, theme);
         break;
       default: // content | conclusion
-        renderContent(slide, s, theme, Boolean(resolvedPath));
+        renderContent(slide, s, theme, Boolean(resolvedPath) || Boolean(aiVisual));
         if (resolvedPath && image) {
-          const bullets = s.bullets.filter((b) => b.trim().length > 0);
-          const hasBullets = bullets.length > 0;
-          const imageX = hasBullets ? 7.2 : 2.0;
-          const imageY = 1.85;
-          const imageW = hasBullets ? 5.2 : 9.3;
-          const imageH = hasBullets ? 3.45 : 4.45;
+          const region = visualRegion(hasBullets);
           slide.addImage({
             path: resolvedPath,
-            x: imageX,
-            y: imageY,
-            w: imageW,
-            h: imageH,
+            ...region,
             altText: image.description ?? "",
           });
-          if (image.description) {
-            slide.addText(image.description, {
-              x: imageX,
-              y: imageY + imageH + 0.12,
-              w: imageW,
-              h: 0.45,
-              fontSize: 12,
-              color: theme.subText,
-              fontFace: theme.font,
-              italic: true,
-              fit: "shrink",
-            });
-          }
+          addCaption(slide, theme, image.description ?? "", region);
+        } else if (aiVisual) {
+          renderAiVisual(pptx, slide, theme, aiVisual, hasBullets);
         }
         break;
     }

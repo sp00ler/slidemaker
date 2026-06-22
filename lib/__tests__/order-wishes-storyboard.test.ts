@@ -215,6 +215,7 @@ async function loadGenerateManual(): Promise<{
   const ordersPath = path.join(activeRuntimeDir, "lib", "orders.js");
   const anthropicPath = path.join(activeRuntimeDir, "lib", "anthropic.js");
   const pptxPath = path.join(activeRuntimeDir, "lib", "pptx.js");
+  const visualsPath = path.join(activeRuntimeDir, "lib", "visuals.js");
   const mailerPath = path.join(activeRuntimeDir, "lib", "mailer.js");
   const envPath = path.join(activeRuntimeDir, "lib", "env.js");
   const tariffsPath = path.join(activeRuntimeDir, "lib", "tariffs.js");
@@ -234,6 +235,10 @@ async function loadGenerateManual(): Promise<{
     `exports.buildPptx = async () => {};`
   );
   await fs.writeFile(
+    visualsPath,
+    `exports.resolveDeckVisuals = async () => new Map();`
+  );
+  await fs.writeFile(
     mailerPath,
     `exports.sendAuthorCustomerEmail = async () => global.__generateCalls.mailer.push("customer");
      exports.sendAdminOrderEmail = async () => global.__generateCalls.mailer.push("admin");
@@ -251,6 +256,7 @@ async function loadGenerateManual(): Promise<{
     ordersPath,
     anthropicPath,
     pptxPath,
+    visualsPath,
     mailerPath,
     envPath,
     tariffsPath,

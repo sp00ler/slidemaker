@@ -28,8 +28,10 @@ CREATE TABLE IF NOT EXISTS order_files (
   mime         text NOT NULL,
   size         int  NOT NULL,
   description  text,
+  kind         text NOT NULL DEFAULT 'slide',  -- 'slide' (картинка под слайд) | 'source' (.docx-первоисточник)
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS order_files_token_idx ON order_files (upload_token);
 CREATE INDEX IF NOT EXISTS order_files_order_idx ON order_files (order_id);
+CREATE INDEX IF NOT EXISTS order_files_kind_idx ON order_files (order_id, kind);

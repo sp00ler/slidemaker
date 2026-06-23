@@ -588,6 +588,23 @@ export default function Home() {
                 {!isAuthor && uploadToken && (
                   <details className="details-field">
                     <summary>
+                      + Собрать из готовой работы .docx (необязательно)
+                      <span>▼</span>
+                    </summary>
+                    <div className="disclosure-body">
+                      <div className="disclosure-hint">
+                        Загрузите готовую работу (.docx) — реферат, диплом, статью.
+                        ИИ возьмёт её текст за основу и подберёт из неё подходящие
+                        картинки, графики и схемы для слайдов.
+                      </div>
+                      <SourceUploader uploadToken={uploadToken} />
+                    </div>
+                  </details>
+                )}
+
+                {!isAuthor && uploadToken && (
+                  <details className="details-field">
+                    <summary>
                       + Добавить свои картинки к слайдам (необязательно)
                       <span>▼</span>
                     </summary>
@@ -697,6 +714,75 @@ export default function Home() {
 
 
     </>
+  );
+}
+
+type SourceStatus = "empty" | "loading" | "ready" | "error";
+
+const MAX_SOURCE_SIZE = 25 * 1024 * 1024;
+
+function SourceUploader({ uploadToken }: { uploadToken: string }) {
+  const [status, setStatus] = useState<SourceStatus>("empty");
+  const [fileName, setFileName] = useState("");
+  const [error, setError] = useState("");
+
+  async function onPick(file: File) {
+    setError("");
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      setStatus("error");
+      setError("Нужен файл .docx (Word)");
+      return;
+    }
+    if (file.size > MAX_SOURCE_SIZE) {
+      setStatus("error");
+      setError("Файл больше 25 МБ");
+      return;
+    }
+
+    setStatus("loading");
+    setFileName(file.name);
+    try {
+      const form = new FormData();
+      form.append("uploadToken", uploadToken);
+      form.append("kind", "source");
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setStatus("error");
+        setError(data.error || "Не удалось загрузить файл");
+        return;
+      }
+      setStatus("ready");
+    } catch {
+      setStatus("error");
+      setError("Не удалось отправить файл. Проверьте интернет.");
+    }
+  }
+
+  return (
+    <div className="source-uploader">
+      <label className="source-pick">
+        <input
+          type="file"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onPick(f);
+            e.target.value = "";
+          }}
+        />
+        <span>{status === "ready" ? "Заменить файл" : "Выбрать файл .docx"}</span>
+      </label>
+      {status === "loading" && (
+        <div className="field-hint">Загружаем {fileName}…</div>
+      )}
+      {status === "ready" && (
+        <div className="field-hint">✓ {fileName} — загружен</div>
+      )}
+      {status === "error" && <div className="field-hint error">{error}</div>}
+    </div>
   );
 }
 

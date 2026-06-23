@@ -219,6 +219,8 @@ async function loadGenerateManual(): Promise<{
   const mailerPath = path.join(activeRuntimeDir, "lib", "mailer.js");
   const envPath = path.join(activeRuntimeDir, "lib", "env.js");
   const tariffsPath = path.join(activeRuntimeDir, "lib", "tariffs.js");
+  const docxPath = path.join(activeRuntimeDir, "lib", "docx.js");
+  const uploadsPath = path.join(activeRuntimeDir, "lib", "uploads.js");
   await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
   await fs.writeFile(
     ordersPath,
@@ -252,6 +254,15 @@ async function loadGenerateManual(): Promise<{
     tariffsPath,
     `exports.TARIFFS = { author: { id: "author", manual: true } };`
   );
+  // generate.ts импортит их на верхнем уровне (история 1) — стабим.
+  await fs.writeFile(
+    docxPath,
+    `exports.extractDocx = async () => ({ text: "", images: [] });`
+  );
+  await fs.writeFile(
+    uploadsPath,
+    `exports.resolveUploadPath = () => ({ dir: "", absolutePath: "", relativePath: "" });`
+  );
   for (const stubPath of [
     ordersPath,
     anthropicPath,
@@ -260,6 +271,8 @@ async function loadGenerateManual(): Promise<{
     mailerPath,
     envPath,
     tariffsPath,
+    docxPath,
+    uploadsPath,
   ]) {
     delete require.cache[stubPath];
   }

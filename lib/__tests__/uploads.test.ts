@@ -98,6 +98,11 @@ async function loadUploads(count = 0): Promise<{ mod: UploadsModule; calls: unkn
   activeRuntimeDir = path.join(testOutDir, `runtime-uploads-${Date.now()}-${Math.random()}`);
   const calls = await writeDbStub(count);
   const uploadsPath = path.join(activeRuntimeDir, "lib", "uploads.js");
+  // uploads.ts импортит @/lib/docx — транспилируем и его в runtime-дерево.
+  await transpileSource(
+    path.join(process.cwd(), "lib", "docx.ts"),
+    path.join(activeRuntimeDir, "lib", "docx.js")
+  );
   await transpileSource(path.join(process.cwd(), "lib", "uploads.ts"), uploadsPath);
   delete require.cache[uploadsPath];
   return { mod: requireFromTest(uploadsPath), calls };

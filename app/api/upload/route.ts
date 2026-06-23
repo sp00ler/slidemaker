@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveUpload, UploadError } from "@/lib/uploads";
+import { saveUpload, saveSourceUpload, UploadError } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,12 +8,18 @@ export async function POST(req: Request) {
   try {
     const form = await req.formData();
     const uploadToken = String(form.get("uploadToken") || "").trim();
+    const kind = String(form.get("kind") || "slide").trim();
     const slideNumber = Number(form.get("slideNumber"));
     const descriptionRaw = String(form.get("description") || "").trim();
     const files = form.getAll("file");
 
     if (files.length !== 1 || !(files[0] instanceof File)) {
       return NextResponse.json({ error: "Нужен один файл" }, { status: 400 });
+    }
+
+    if (kind === "source") {
+      await saveSourceUpload({ uploadToken, file: files[0] });
+      return NextResponse.json({ ok: true, kind: "source" });
     }
 
     const result = await saveUpload({

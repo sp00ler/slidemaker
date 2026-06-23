@@ -103,9 +103,22 @@ export async function getOrderFiles(
   }>(
     `SELECT slide_number, stored_path, description
      FROM order_files
-     WHERE order_id = $1
+     WHERE order_id = $1 AND kind = 'slide'
      ORDER BY slide_number ASC`,
     [orderId]
   );
   return rows;
+}
+
+// История 1: путь к исходной работе (.docx), если она прикреплена к заказу.
+export async function getOrderSource(
+  orderId: string
+): Promise<{ stored_path: string } | null> {
+  const { rows } = await pool.query<{ stored_path: string }>(
+    `SELECT stored_path FROM order_files
+     WHERE order_id = $1 AND kind = 'source'
+     LIMIT 1`,
+    [orderId]
+  );
+  return rows[0] ?? null;
 }

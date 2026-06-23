@@ -53,6 +53,9 @@ const SlideSchema = z.object({
   subheading: z.string(),
   bullets: z.array(z.string()),
   visual: VisualSchema,
+  // История 1: индекс картинки из исходной работы (.docx), которую модель
+  // выбрала для этого слайда. -1 = ничего не подошло (используется visual).
+  source_image: z.number().int().default(-1),
 });
 
 const DeckSchema = z.object({
@@ -125,6 +128,7 @@ function makeTitleSlide(deck: Deck): Slide {
     subheading: deck.subtitle || "",
     bullets: [],
     visual: emptyVisual(),
+    source_image: -1,
   };
 }
 
@@ -135,6 +139,7 @@ function makeConclusionSlide(): Slide {
     subheading: "",
     bullets: ["Ключевые выводы представлены выше."],
     visual: emptyVisual(),
+    source_image: -1,
   };
 }
 
@@ -145,6 +150,7 @@ function makePlaceholderSlide(index: number): Slide {
     subheading: "",
     bullets: ["Содержание будет уточнено при доработке презентации."],
     visual: emptyVisual(),
+    source_image: -1,
   };
 }
 
@@ -235,6 +241,12 @@ function insertTopUpSlides(deck: Deck, slides: Slide[]): Deck {
   };
 }
 
+// История 1: картинка из исходной работы, передаётся модели как vision-вход.
+export type SourceImageInput = {
+  mime: "image/png" | "image/jpeg" | "image/gif" | string;
+  base64: string;
+};
+
 export async function generateDeck(params: {
   topic: string;
   style: string;
@@ -242,10 +254,13 @@ export async function generateDeck(params: {
   wishes?: string | null;
   storyboard?: string | null;
   variantHint?: string;
+  sourceText?: string | null;
+  sourceImages?: SourceImageInput[];
 }): Promise<Deck> {
   const { topic, slideCount } = params;
   const style = (params.style as StyleId) in STYLES ? (params.style as StyleId) : "business";
   const styleInfo = STYLES[style];
+  const sourceImages = params.sourceImages ?? [];
 
   const system = buildDeckSystemPrompt();
   const prompt = buildDeckPrompt({
@@ -256,13 +271,15 @@ export async function generateDeck(params: {
     wishes: params.wishes,
     storyboard: params.storyboard,
     variantHint: params.variantHint,
+    sourceText: params.sourceText,
+    sourceImageCount: sourceImages.length,
   });
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 8000,
     system,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: buildUserContent(prompt, sourceImages) }],
   });
 
   const deck = parseDeckResponse(getResponseText(response));
@@ -311,6 +328,30 @@ export async function generateDeck(params: {
   return normalizeDeck(deckForNormalization, slideCount);
 }
 
+// Собирает user-content: текстовый промпт + (если есть) картинки исходной
+// работы как vision-блоки. Порядок картинок = их индексы 0..N-1, на которые
+// модель ссылается через source_image.
+function buildUserContent(
+  prompt: string,
+  sourceImages: SourceImageInput[]
+): Anthropic.Messages.MessageParam["content"] {
+  if (sourceImages.length === 0) return prompt;
+
+  const blocks: Anthropic.Messages.ContentBlockParam[] = [{ type: "text", text: prompt }];
+  sourceImages.forEach((img, index) => {
+    blocks.push({ type: "text", text: `Изображение из работы, индекс ${index}:` });
+    blocks.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: img.mime as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
+        data: img.base64,
+      },
+    });
+  });
+  return blocks;
+}
+
 export function buildDeckSystemPrompt(): string {
   return (
     "Ты — арт-директор и редактор презентаций. Делаешь чёткую логичную структуру слайдов, " +
@@ -326,6 +367,7 @@ export function buildDeckSystemPrompt(): string {
     "image — кастомная иллюстрация (image_prompt на EN, 16:9, без текста на картинке); " +
     "none — слайд самодостаточен текстом (титул и заключение обычно none). " +
     "Поля caption и alt — на языке темы; alt обязателен для photo и image. " +
+    "Если приложены картинки исходной работы — отбирай только содержательные (графики, схемы, диаграммы, фото объекта), мусор (логотипы, иконки, печати) игнорируй; выбранную картинку указывай через source_image. " +
     "Возвращай СТРОГО валидный JSON по схеме, без markdown и без пояснений."
   );
 }
@@ -338,15 +380,18 @@ export function buildDeckPrompt(params: {
   wishes?: string | null;
   storyboard?: string | null;
   variantHint?: string;
+  sourceText?: string | null;
+  sourceImageCount?: number;
 }): string {
   const userBlocks = buildUserBlocks(params.slideCount, params.wishes, params.storyboard);
   const variantLine = params.variantHint ? `\n${params.variantHint}\n` : "";
+  const sourceBlocks = buildSourceBlocks(params.sourceText, params.sourceImageCount ?? 0);
 
   return `Создай структуру презентации.
 Тема: "${params.topic}"
 Стиль оформления: ${params.styleLabel} (${params.styleHint})
 Количество слайдов: ровно ${params.slideCount}.
-${userBlocks}${variantLine}
+${userBlocks}${sourceBlocks}${variantLine}
 
 Требования:
 - Первый слайд — титульный (layout "title"): heading = название темы, subheading = краткий подзаголовок, bullets = [].
@@ -382,10 +427,12 @@ ${userBlocks}${variantLine}
         "chart": { "kind": "bar"|"line"|"pie", "unit": string, "data": [ { "label": string, "value": number } ] } | null,
         "caption": string,
         "alt": string
-      }
+      },
+      "source_image": number
     }
   ]
 }
+source_image — индекс приложенной картинки из работы для этого слайда, или -1 если нет/не приложено.
 Верни только JSON.`;
 }
 
@@ -471,10 +518,40 @@ ${normalizedWishes}
   return blocks.length ? `\n${blocks.join("\n\n")}\n` : "";
 }
 
+// История 1: блок исходной работы (текст из .docx) + инструкция по отбору её
+// картинок. Картинки переданы отдельными vision-блоками с индексами 0..N-1.
+function buildSourceBlocks(
+  sourceText?: string | null,
+  sourceImageCount = 0
+): string {
+  const text = normalizeUserText(sourceText);
+  const blocks: string[] = [];
+
+  if (text) {
+    blocks.push(
+      `Это материалы исходной работы заказчика — строй структуру и текст слайдов на их основе (факты, термины, логика, числа берём отсюда, не выдумываем):
+<user_source>
+${text}
+</user_source>`
+    );
+  }
+
+  if (sourceImageCount > 0) {
+    blocks.push(
+      `К работе приложено ${sourceImageCount} изображений (индексы 0..${sourceImageCount - 1}), они показаны ниже как картинки.
+Отбери только СОДЕРЖАТЕЛЬНЫЕ и релевантные (графики, диаграммы, схемы, таблицы-картинки, фото объекта по теме). Игнорируй логотипы, иконки, декоративные линии, гербы, подписи, сканы печатей.
+Для каждого content-слайда, если подходит конкретное изображение, поставь его индекс в поле source_image; иначе source_image = -1.
+Одно изображение — максимум на один слайд (не повторяй индексы). Если для слайда выбран source_image (>=0), поле visual оставь type "none" — картинка из работы важнее сгенерированного визуала.`
+    );
+  }
+
+  return blocks.length ? `\n${blocks.join("\n\n")}\n` : "";
+}
+
 function normalizeUserText(value?: string | null): string {
   // Вырезаем делимитер-теги из пользовательского текста, иначе юзер закрывающим
   // тегом выходит из блока и обходит инъекционный guard в system-промпте.
   return (value ?? "")
-    .replace(/<\/?user_(?:wishes|storyboard)>/gi, "")
+    .replace(/<\/?user_(?:wishes|storyboard|source)>/gi, "")
     .trim();
 }

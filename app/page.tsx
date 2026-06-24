@@ -12,7 +12,7 @@ import {
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
 import { SourceUploader } from "./SourceUploader";
 
-const WISHES_MAX = 500;
+const WISHES_MAX = 2000;
 const AUTHOR_EMAIL = "custom@slidemaker.ru";
 const MAX_UPLOAD_SLIDES = 15;
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
@@ -480,7 +480,12 @@ export default function Home() {
                 <div className="payment-amount">{tariff.price} ₽</div>
                 <h3>Переходим к оплате</h3>
                 <p>Не закрывайте вкладку, сейчас откроется страница ЮКассы.</p>
-                <div className="spinner" />
+                <div className="deck-loader" role="status" aria-label="Загрузка">
+                  <span className="deck-base" />
+                  <span className="deck-slide s1" />
+                  <span className="deck-slide s2" />
+                  <span className="deck-slide s3" />
+                </div>
               </div>
             ) : (
               <form className="card" onSubmit={handleSubmit}>
@@ -656,7 +661,7 @@ export default function Home() {
                         maxLength={WISHES_MAX}
                         value={wishes}
                         onChange={(e) => setWishes(e.target.value)}
-                        placeholder="Например: хочу акцент на ROI и примеры из e-commerce, тон — уверенный, без воды. Целевая аудитория — топ-менеджеры. Дедлайн: 25 июня."
+                        placeholder="Например: хочу акцент на ROI и примеры из e-commerce, тон — уверенный, без воды. Целевая аудитория — топ-менеджеры. Можно расписать по слайдам — что на каком должно быть."
                         required={isAuthor}
                       />
                       <div className={counterClass(wishes.length, WISHES_MAX)}>

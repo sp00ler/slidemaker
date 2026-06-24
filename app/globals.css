@@ -180,6 +180,7 @@ b,strong{font-weight:700}
 .card{background:var(--white);border:1px solid var(--line);border-radius:14px;
   padding:28px;box-shadow:var(--frame-sh);max-width:680px}
 .form-section .card{margin-inline:auto}
+.form-section .payment-redirect{margin-inline:auto}
 .field{margin-bottom:22px}
 .field label{display:block;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:7px;
   text-transform:uppercase;letter-spacing:.04em}
@@ -434,19 +435,29 @@ input[type="range"]::-moz-range-thumb{width:20px;height:20px;border:0;border-rad
 .payment-amount{font-size:30px;font-weight:900;letter-spacing:-.04em;color:var(--ink);margin-bottom:18px}
 .payment-redirect h3{font-size:18px;font-weight:800;color:var(--ink);margin:0 0 8px}
 .payment-redirect p{font-size:14px;color:var(--ink-2)}
-.spinner{width:36px;height:36px;margin:18px auto 0;border:2px solid var(--line-2);border-top-color:var(--ink);
-  border-radius:50%;animation:spin 1s linear infinite}
+/* ── DECK LOADER — мини-слайды слетаются в колоду (оплата + ожидание) ── */
+.deck-loader{position:relative;width:64px;height:64px;margin:14px auto 24px}
+.deck-loader .deck-slide,.deck-loader .deck-base{position:absolute;left:50%;width:30px;height:22px;
+  margin-left:-15px;border-radius:3px;box-sizing:border-box}
+.deck-loader .deck-base{bottom:8px;background:var(--cobalt);
+  box-shadow:0 0 0 2px var(--white),0 7px 16px -7px rgba(30,77,216,.6)}
+.deck-loader .deck-slide{top:0;background:var(--white);border:1.5px solid var(--ink);
+  animation:deck-fly 1.4s cubic-bezier(.5,.1,.3,1) infinite}
+.deck-loader .s1{animation-delay:0s}
+.deck-loader .s2{animation-delay:.18s}
+.deck-loader .s3{animation-delay:.36s}
+@keyframes deck-fly{
+  0%{transform:translateY(-4px) rotate(-9deg);opacity:0}
+  18%{opacity:1}
+  60%,78%{transform:translateY(34px) rotate(0);opacity:1}
+  100%{transform:translateY(34px) rotate(0);opacity:0}
+}
 
 /* ── SUCCESS / STATUS PAGE ──────────────────────────────── */
 .success-page{min-height:100vh;display:grid;place-items:center;background:var(--paper);padding:48px 20px}
 .success-shell{width:100%;max-width:520px}
 .success-overlay{background:var(--white);border:1px solid var(--line);border-radius:18px;
   padding:44px 34px;text-align:center;box-shadow:var(--frame-sh)}
-/* двойной встречный лоадер — cobalt + ink */
-.sm-loader{position:relative;width:60px;height:60px;margin:4px auto 26px}
-.sm-loader::before,.sm-loader::after{content:"";position:absolute;border-radius:50%;border:3px solid transparent}
-.sm-loader::before{inset:0;border-top-color:var(--cobalt);border-right-color:var(--cobalt);animation:spin .9s linear infinite}
-.sm-loader::after{inset:10px;border-bottom-color:var(--ink);animation:spin 1.5s linear infinite reverse}
 .success-icon{width:62px;height:62px;margin:0 auto 18px;border-radius:50%;background:var(--ink);
   color:#fff;display:grid;place-items:center}
 .success-icon.author{background:var(--amber);color:var(--amber-ink)}

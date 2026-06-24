@@ -5,6 +5,7 @@ import { MIN_SLIDES, STYLES, StyleId } from "@/lib/tariffs";
 import { SourceUploader } from "../SourceUploader";
 
 const STORYBOARD_MAX = 1000;
+const WISHES_MAX = 2000;
 
 export function LogoutButton() {
   async function logout() {
@@ -152,10 +153,21 @@ export function RegenerateForm({
             <textarea
               id={`wishes-${orderId}`}
               value={wishes}
-              maxLength={500}
+              maxLength={WISHES_MAX}
               onChange={(e) => setWishes(e.target.value)}
-              placeholder="Тон, акцент, структура, что важно включить — любые пожелания к презентации"
+              placeholder="Тон, акцент, структура, что важно включить. Можно расписать по слайдам — что на каком должно быть."
             />
+            <div
+              className={`char-counter${
+                wishes.length >= WISHES_MAX
+                  ? " full"
+                  : wishes.length >= WISHES_MAX * 0.8
+                    ? " warn"
+                    : ""
+              }`}
+            >
+              {wishes.length} / {WISHES_MAX}
+            </div>
           </div>
         </div>
       </details>

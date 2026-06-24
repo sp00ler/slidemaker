@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const MAX_WISHES_LENGTH = 500;
+const MAX_WISHES_LENGTH = 2000;
 const MAX_STORYBOARD_LENGTH = 1000;
 
 export async function POST(req: Request) {

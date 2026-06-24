@@ -64,7 +64,12 @@ export default function SuccessPage() {
       <div className="success-shell">
         {(status === "loading" || status === "pending" || status === "generating") && (
           <div className="success-overlay">
-            <div className="sm-loader" aria-label="Загрузка" role="status" />
+            <div className="deck-loader" role="status" aria-label="Загрузка">
+              <span className="deck-base" />
+              <span className="deck-slide s1" />
+              <span className="deck-slide s2" />
+              <span className="deck-slide s3" />
+            </div>
             <div className="success-title">Готовим вашу презентацию…</div>
             <div className="success-sub">
               Это занимает до минуты. Ссылка также придёт на почту — страницу можно закрыть.

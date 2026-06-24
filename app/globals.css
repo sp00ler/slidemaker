@@ -111,7 +111,7 @@ b,strong{font-weight:700}
 
 /* hero 3D deck of real slides */
 .deckwrap{position:relative;perspective:1600px}
-.deck{position:relative;width:min(560px,100%);margin:0 auto;transform-style:preserve-3d;
+.deckwrap .deck{position:relative;width:min(560px,100%);margin:0 auto;transform-style:preserve-3d;
   transition:transform .15s ease-out}
 .scard{position:absolute;inset:0;background:var(--white);border-radius:14px;padding:10px;
   box-shadow:0 40px 80px -34px rgba(11,13,16,.45),0 0 0 1px var(--line)}
@@ -120,11 +120,11 @@ b,strong{font-weight:700}
 .scard.back2{transform:translateZ(-90px) translateY(42px) scale(.95);opacity:.5}
 .scard.back1{transform:translateZ(-45px) translateY(21px) scale(.975);opacity:.8}
 .scard.front{position:relative}
-.deck:hover .scard.front img{filter:none}
+.deckwrap .deck:hover .scard.front img{filter:none}
 .deck-badge{position:absolute;top:-14px;right:-14px;z-index:4;background:var(--ink);color:#fff;
   font-size:12px;font-weight:800;padding:7px 13px;border-radius:8px;transform:translateZ(60px);
   transition:background .3s}
-.deck:hover .deck-badge{background:var(--amber);color:var(--amber-ink)}
+.deckwrap .deck:hover .deck-badge{background:var(--amber);color:var(--amber-ink)}
 .deck-cap{text-align:center;margin-top:24px;font-size:12.5px;color:var(--ink-3)}
 .deck-cap em{font-style:normal;color:var(--ink);font-weight:600}
 @media (hover:none){.scard img{filter:none!important}.deck-badge{background:var(--amber);color:var(--amber-ink)}}
@@ -226,7 +226,7 @@ b,strong{font-weight:700}
   box-shadow:0 0 14px rgba(120,170,255,.7)}
 
 /* колода слайдов */
-.deck{position:absolute;right:18px;top:62px;width:150px;height:96px;z-index:1}
+.blast-scene .deck{position:absolute;right:18px;top:62px;width:150px;height:96px;z-index:1}
 .deck-slide{position:absolute;width:118px;height:66px;border-radius:7px;background:#101a36;
   border:1px solid rgba(120,150,255,.4);box-shadow:0 6px 18px rgba(0,0,0,.4),0 0 14px rgba(30,77,216,.3);
   opacity:0;transform-origin:left center}
@@ -540,7 +540,7 @@ input[type="range"]::-moz-range-thumb{width:20px;height:20px;border:0;border-rad
 @media (max-width:980px){
   .hero-inner{grid-template-columns:1fr;gap:40px;padding-bottom:40px}
   .deckwrap{height:62vw;margin-top:6px}
-  .deck{position:absolute;inset:0;left:50%;width:min(560px,88vw);transform:translateX(-50%)!important}
+  .deckwrap .deck{position:absolute;inset:0;left:50%;width:min(560px,88vw);transform:translateX(-50%)}
   .scard.front{position:absolute}
   .ex-row{grid-template-columns:1fr;gap:24px;padding:34px 0}
   .ex-row:nth-child(even) .ex-media{order:0}

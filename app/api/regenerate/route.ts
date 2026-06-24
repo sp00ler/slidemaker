@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { parseOptionalText } from "@/lib/checkout-validation";
 import { processOrder } from "@/lib/generate";
-import { createRegenerationOrder } from "@/lib/orders";
+import { bindUploadFilesToOrder, createRegenerationOrder } from "@/lib/orders";
+import { isUuid } from "@/lib/uploads";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS } from "@/lib/tariffs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_WISHES_LENGTH = 500;
+const MAX_STORYBOARD_LENGTH = 1000;
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -22,7 +24,13 @@ export async function POST(req: Request) {
     const topic = String(body.topic || "").trim();
     const style = String(body.style || "") as StyleId;
     const slideCount = Number(body.slideCount);
+    const uploadToken = String(body.uploadToken || "").trim();
     const wishesResult = parseOptionalText(body.wishes, MAX_WISHES_LENGTH, "Пожелания");
+    const storyboardResult = parseOptionalText(
+      body.storyboard,
+      MAX_STORYBOARD_LENGTH,
+      "Сценарий"
+    );
 
     if (!orderId) {
       return NextResponse.json({ error: "Не указан заказ" }, { status: 400 });
@@ -49,6 +57,12 @@ export async function POST(req: Request) {
     if (wishesResult.error) {
       return NextResponse.json({ error: wishesResult.error }, { status: 400 });
     }
+    if (storyboardResult.error) {
+      return NextResponse.json({ error: storyboardResult.error }, { status: 400 });
+    }
+    if (uploadToken && !isUuid(uploadToken)) {
+      return NextResponse.json({ error: "Некорректный uploadToken" }, { status: 400 });
+    }
 
     const order = await createRegenerationOrder({
       originalOrderId: orderId,
@@ -58,7 +72,7 @@ export async function POST(req: Request) {
       slideCount,
       topic,
       wishes: wishesResult.value,
-      storyboard: null,
+      storyboard: storyboardResult.value,
       style,
     });
 
@@ -67,6 +81,11 @@ export async function POST(req: Request) {
         { error: "Повторная генерация недоступна" },
         { status: 409 }
       );
+    }
+
+    // Привязываем загруженный .docx/картинки к новому заказу до генерации.
+    if (uploadToken) {
+      await bindUploadFilesToOrder(order.id, uploadToken);
     }
 
     processOrder(order).catch((err) =>

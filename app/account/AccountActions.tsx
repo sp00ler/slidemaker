@@ -1,7 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS } from "@/lib/tariffs";
+import { SourceUploader } from "../SourceUploader";
+
+const STORYBOARD_MAX = 1000;
 
 export function LogoutButton() {
   async function logout() {
@@ -35,8 +38,15 @@ export function RegenerateForm({
     Math.min(Math.max(initialSlideCount || MIN_SLIDES, MIN_SLIDES), TARIFFS.standard.maxSlides)
   );
   const [wishes, setWishes] = useState("");
+  const [storyboard, setStoryboard] = useState("");
+  const [uploadToken, setUploadToken] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // uploadToken только на клиенте — иначе SSR/hydration mismatch.
+  useEffect(() => {
+    setUploadToken(globalThis.crypto.randomUUID());
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,7 +55,15 @@ export function RegenerateForm({
     const res = await fetch("/api/regenerate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId, topic, style, slideCount, wishes }),
+      body: JSON.stringify({
+        orderId,
+        topic,
+        style,
+        slideCount,
+        wishes,
+        storyboard,
+        uploadToken,
+      }),
     });
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) {
@@ -99,6 +117,23 @@ export function RegenerateForm({
             ))}
           </select>
         </div>
+      </div>
+      <div className="field">
+        <label>Исходная работа (.docx) — необязательно</label>
+        <p className="field-hint">
+          Новая тема? Загрузите другую работу — соберём презентацию из неё.
+        </p>
+        {uploadToken && <SourceUploader uploadToken={uploadToken} />}
+      </div>
+      <div className="field">
+        <label htmlFor={`storyboard-${orderId}`}>Сценарий по слайдам — необязательно</label>
+        <textarea
+          id={`storyboard-${orderId}`}
+          value={storyboard}
+          maxLength={STORYBOARD_MAX}
+          onChange={(e) => setStoryboard(e.target.value)}
+          placeholder="Слайд 1 — …; Слайд 2 — …"
+        />
       </div>
       <div className="field">
         <label htmlFor={`wishes-${orderId}`}>Пожелания</label>

@@ -202,7 +202,6 @@ export async function processOrder(order: OrderRow): Promise<void> {
   const outPath = path.join(dir, fileName);
   const expiresAt = new Date(Date.now() + env.DOWNLOADS_TTL_DAYS * 24 * 60 * 60 * 1000);
   let title = order.topic;
-  let secondUrl: string | undefined;
 
   const baseParams = {
     topic: order.topic,
@@ -243,20 +242,8 @@ export async function processOrder(order: OrderRow): Promise<void> {
       sourceImages: source.images,
     };
 
-    // Вариант 2 запускаем сразу — параллельно варианту 1 (best-effort).
-    const deck2Promise = generateDeck({
-      ...genParams,
-      variantHint:
-        "Сделай альтернативный вариант: иная структура, порядок и подача, чтобы заметно отличался от первого.",
-    }).catch((e) => {
-      console.warn("order variant 2 generation failed:", {
-        orderId: order.id,
-        error: getErrorMessage(e),
-      });
-      return null;
-    });
-
-    // Вариант 1 — обязателен, с ретраем.
+    // Одна генерация на оплату. Вторую (другая тема/стиль) пользователь
+    // запускает сам из ЛК через /api/regenerate.
     let deck1: Deck | undefined;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -280,31 +267,6 @@ export async function processOrder(order: OrderRow): Promise<void> {
     );
     await buildPptx(deck1, order.style, outPath, images1, await safeVisuals(deck1));
     await markDone(order.id, fileRel);
-
-    // Достраиваем вариант 2, если сгенерировался («2 генерации за оплату»).
-    const deck2 = await deck2Promise;
-    if (deck2) {
-      try {
-        const fileName2 = buildFileName(order.email);
-        const images2 = mergeSlideImages(
-          buildSourceSlideMap(deck2, source.extractedPaths),
-          slideImages
-        );
-        await buildPptx(
-          deck2,
-          order.style,
-          path.join(dir, fileName2),
-          images2,
-          await safeVisuals(deck2)
-        );
-        secondUrl = `${env.APP_URL}/api/download/${fileName2}`;
-      } catch (e) {
-        console.warn("order variant 2 build failed, delivering single deck:", {
-          orderId: order.id,
-          error: getErrorMessage(e),
-        });
-      }
-    }
   } catch (e) {
     await markError(order.id).catch(() => {});
     console.error("order generation failed; manual refund required:", {
@@ -316,7 +278,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
   }
 
   try {
-    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, title, expiresAt, secondUrl, order);
+    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, title, expiresAt, undefined, order);
   } catch (e) {
     console.error("order email delivery failed; manual resend required:", {
       orderId: order.id,

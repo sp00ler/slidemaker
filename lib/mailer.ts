@@ -36,7 +36,6 @@ export async function sendDeckEmail(
   downloadUrl: string,
   title: string,
   expiresAt: Date,
-  secondUrl?: string,
   order?: OrderRow
 ): Promise<void> {
   const from = process.env.MAIL_FROM || "SlideMaker <no-reply@slidemaker.ru>";
@@ -49,7 +48,6 @@ export async function sendDeckEmail(
     downloadUrl,
     title,
     expiresAt,
-    secondUrl,
     loginUrl,
     orderCount <= 1
   );
@@ -188,7 +186,6 @@ export function renderDeckEmail(
   downloadUrl: string,
   title: string,
   expiresAt: Date,
-  secondUrl?: string,
   loginUrl?: string,
   isFirstOrder = false
 ): { html: string; text: string } {
@@ -196,18 +193,14 @@ export function renderDeckEmail(
   const htmlDownloadUrl = escapeHtml(downloadUrl);
   const expiresText = formatExpiresAt(expiresAt);
   const htmlExpiresText = escapeHtml(expiresText);
-  const htmlSecondUrl = secondUrl ? escapeHtml(secondUrl) : "";
   const htmlLoginUrl = loginUrl ? escapeHtml(loginUrl) : "";
 
   const text =
     `Здравствуйте!\n\n` +
-    (secondUrl
-      ? `Мы сделали две версии вашей презентации — выберите лучшую.\n`
-      : `Ваша презентация готова.\n`) +
+    `Ваша презентация готова.\n` +
     `Название: ${title}\n\n` +
-    `Скачать вариант 1: ${downloadUrl}\n` +
-    (secondUrl ? `Скачать вариант 2: ${secondUrl}\n` : "") +
-    `\nСсылки действуют до ${expiresText} (1 неделя). Скачайте файлы вовремя.\n\n` +
+    `Скачать: ${downloadUrl}\n` +
+    `\nСсылка действует до ${expiresText} (1 неделя). Скачайте файл вовремя.\n\n` +
     (loginUrl
       ? `${isFirstOrder ? "Вы зарегистрированы в личном кабинете." : "Ваши презентации доступны в личном кабинете."}\n` +
         `Войти: ${loginUrl}\n\n`
@@ -248,19 +241,8 @@ export function renderDeckEmail(
     `<tr><td style="padding:0 28px 0 28px;font-family:Arial,sans-serif;color:#6B7280;font-size:13px;line-height:20px;word-break:break-all;">` +
     `Если кнопка не открылась, используйте ссылку:<br><a href="${htmlDownloadUrl}" style="color:#111827;text-decoration:underline;">${htmlDownloadUrl}</a>` +
     `</td></tr>` +
-    (secondUrl
-      ? `<tr><td align="center" style="padding:14px 28px 4px 28px;">` +
-        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">` +
-        `<tr><td bgcolor="#1E4DD8" style="background:#1E4DD8;border-radius:6px;text-align:center;">` +
-        `<a href="${htmlSecondUrl}" target="_blank" style="display:block;padding:13px 24px;font-family:Arial,sans-serif;font-size:15px;line-height:18px;color:#FFFFFF;text-decoration:none;font-weight:700;">Скачать вариант 2</a>` +
-        `</td></tr></table>` +
-        `</td></tr>` +
-        `<tr><td style="padding:6px 28px 0 28px;font-family:Arial,sans-serif;color:#6B7280;font-size:13px;line-height:20px;word-break:break-all;">` +
-        `Ссылка варианта 2:<br><a href="${htmlSecondUrl}" style="color:#111827;text-decoration:underline;">${htmlSecondUrl}</a>` +
-        `</td></tr>`
-      : "") +
     `<tr><td style="padding:20px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">` +
-    `<strong>${secondUrl ? "Ссылки действуют" : "Ссылка действует"} до ${htmlExpiresText} (1 неделя).</strong><br>Скачайте ${secondUrl ? "файлы" : "файл"} вовремя.` +
+    `<strong>Ссылка действует до ${htmlExpiresText} (1 неделя).</strong><br>Скачайте файл вовремя.` +
     `</td></tr>` +
     (loginUrl
       ? `<tr><td style="padding:18px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">` +

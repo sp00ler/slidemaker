@@ -198,6 +198,43 @@ b,strong{font-weight:700}
   border:1.5px solid var(--line-2);border-radius:var(--r-sm);font-size:14px;font-weight:600;
   color:var(--ink);background:var(--white);transition:border-color .15s,background .15s}
 .source-pick:hover{border-color:var(--cobalt);background:var(--cobalt-bg,rgba(30,77,216,.06))}
+
+/* blast loader — overlay на время загрузки/обработки .docx */
+.blast{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,10,20,.62);backdrop-filter:blur(10px) saturate(120%);
+  -webkit-backdrop-filter:blur(10px) saturate(120%);animation:blast-in .25s ease-out}
+.blast-stage{display:flex;flex-direction:column;align-items:center;gap:26px;text-align:center;padding:24px}
+.blast-ring{position:relative;width:148px;height:148px;border-radius:50%;
+  background:conic-gradient(var(--cobalt) var(--p,0%),rgba(255,255,255,.12) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 12px),#000 calc(100% - 11px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 12px),#000 calc(100% - 11px));
+  transition:background .2s linear;filter:drop-shadow(0 0 14px rgba(30,77,216,.55))}
+.blast-ring.is-spin{background:conic-gradient(transparent 0,var(--cobalt) 280deg,transparent 360deg);
+  animation:blast-spin .9s linear infinite}
+.blast-core{position:absolute;inset:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 40%,rgba(30,77,216,.30),rgba(8,10,20,.85));
+  box-shadow:inset 0 0 22px rgba(30,77,216,.45);animation:blast-pulse 1.6s ease-in-out infinite}
+.blast-pct{font-size:30px;font-weight:800;color:#fff;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.blast-dot-pulse{width:16px;height:16px;border-radius:50%;background:#fff;animation:blast-corepulse 1s ease-in-out infinite}
+.blast-orbit{position:absolute;top:50%;left:50%;width:10px;height:10px;margin:-5px;border-radius:50%;
+  background:var(--cobalt);box-shadow:0 0 10px var(--cobalt)}
+.blast-orbit-1{animation:blast-orbit 1.7s linear infinite}
+.blast-orbit-2{animation:blast-orbit 2.4s linear infinite reverse;background:#fff;box-shadow:0 0 10px #fff}
+.blast-orbit-3{animation:blast-orbit 3.1s linear infinite}
+.blast-label{font-size:18px;font-weight:700;color:#fff;animation:blast-fade .5s ease}
+.blast-file{font-size:13px;color:rgba(255,255,255,.6);margin-top:6px;max-width:280px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes blast-in{from{opacity:0}to{opacity:1}}
+@keyframes blast-spin{to{transform:rotate(360deg)}}
+@keyframes blast-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes blast-corepulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.5}}
+@keyframes blast-orbit{from{transform:rotate(0) translateX(82px)}to{transform:rotate(360deg) translateX(82px)}}
+@keyframes blast-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .blast{animation:none}
+  .blast-ring.is-spin{animation:blast-spin 2s linear infinite}
+  .blast-core,.blast-dot-pulse,.blast-orbit,.blast-label{animation:none}
+}
 .char-counter{font-size:11px;color:var(--ink-3);text-align:right;margin-top:3px}
 .char-counter.warn{color:var(--amber-ink)}
 .char-counter.full{color:var(--error);font-weight:700}

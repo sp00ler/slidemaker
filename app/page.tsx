@@ -481,7 +481,7 @@ export default function Home() {
                 <div className="payment-amount">{tariff.price} ₽</div>
                 <h3>Переходим к оплате</h3>
                 <p>Не закрывайте вкладку, сейчас откроется страница ЮКассы.</p>
-                <BlastScene processing />
+                <BlastScene processing simulate />
               </div>
             ) : (
               <form className="card" onSubmit={handleSubmit}>

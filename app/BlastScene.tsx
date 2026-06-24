@@ -4,20 +4,42 @@ import { useEffect, useState } from "react";
 
 // Чистая сцена «документ → колода слайдов». Переиспользуется:
 // - upload (.docx) — с реальным percent в doc-fill, фаза process включает анимацию;
-// - оплата — inline в карточке (processing, без percent);
-// - генерация — внутри полноэкранного GenerationBlast.
+// - оплата — inline в карточке (simulate: фейковая заливка, нет реального percent);
+// - генерация — внутри полноэкранного GenerationBlast (simulate).
+// simulate: сам анимирует doc-fill 0→100 и держит, когда реального percent нет —
+// чтобы оплата/генерация выглядели так же «охуенно», как upload, а не просто колодой.
 export function BlastScene({
   percent,
   processing = true,
+  simulate = false,
 }: {
   percent?: number;
   processing?: boolean;
+  simulate?: boolean;
 }) {
+  const [simPercent, setSimPercent] = useState(0);
+
+  useEffect(() => {
+    if (!simulate || percent != null) return;
+    let raf = 0;
+    const start = performance.now();
+    const DURATION = 4000; // мс до полной заливки, затем держим 100
+    const tick = (now: number) => {
+      const p = Math.min(100, Math.round(((now - start) / DURATION) * 100));
+      setSimPercent(p);
+      if (p < 100) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [simulate, percent]);
+
+  const fill = percent != null ? percent : simulate ? simPercent : null;
+
   return (
     <div className={`blast-scene ${processing ? "is-process" : ""}`}>
       <div className="doc">
-        {percent != null && (
-          <div className="doc-fill" style={{ height: `${percent}%` }} />
+        {fill != null && (
+          <div className="doc-fill" style={{ height: `${fill}%` }} />
         )}
         <div className="doc-body">
           <span className="doc-line" />
@@ -63,7 +85,7 @@ export function GenerationBlast({ sub }: { sub?: string }) {
 
   return (
     <div className="blast" role="status" aria-live="polite" aria-label={GEN_PHRASES[i]}>
-      <BlastScene processing />
+      <BlastScene processing simulate />
       <div className="blast-text">
         <div className="blast-label">{GEN_PHRASES[i]}</div>
         {sub && <div className="blast-file">{sub}</div>}

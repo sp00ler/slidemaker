@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { getOrdersByUser, type OrderRow } from "@/lib/orders";
+import { TARIFFS, type Tariff } from "@/lib/tariffs";
 import { LogoutButton, RegenerateForm } from "./AccountActions";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +107,10 @@ export default async function AccountPage() {
                       initialTopic={order.topic}
                       initialStyle={order.style}
                       initialSlideCount={order.slide_count}
+                      maxSlides={
+                        TARIFFS[order.tariff as Tariff["id"]]?.maxSlides ??
+                        TARIFFS.basic.maxSlides
+                      }
                     />
                   ) : order.regen_used ? (
                     <div className="field-hint">Повторная генерация уже использована.</div>

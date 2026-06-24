@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { parseOptionalText } from "@/lib/checkout-validation";
 import { processOrder } from "@/lib/generate";
-import { bindUploadFilesToOrder, createRegenerationOrder } from "@/lib/orders";
+import { bindUploadFilesToOrder, createRegenerationOrder, getOrder } from "@/lib/orders";
 import { isUuid } from "@/lib/uploads";
-import { MIN_SLIDES, STYLES, StyleId, TARIFFS } from "@/lib/tariffs";
+import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +35,21 @@ export async function POST(req: Request) {
     if (!orderId) {
       return NextResponse.json({ error: "Не указан заказ" }, { status: 400 });
     }
+
+    // Реген наследует тариф исходного заказа — лимит слайдов от него, а не 15.
+    const original = await getOrder(orderId);
+    if (!original || original.user_id !== user.id) {
+      return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
+    }
+    const tariffId = original.tariff as Tariff["id"];
+    const tariff = TARIFFS[tariffId];
+    if (!tariff || tariff.manual) {
+      return NextResponse.json(
+        { error: "Повторная генерация недоступна для этого тарифа" },
+        { status: 400 }
+      );
+    }
+
     if (topic.length < 3 || topic.length > 300) {
       return NextResponse.json(
         { error: "Тема должна быть от 3 до 300 символов" },
@@ -47,10 +62,10 @@ export async function POST(req: Request) {
     if (
       !Number.isInteger(slideCount) ||
       slideCount < MIN_SLIDES ||
-      slideCount > TARIFFS.standard.maxSlides
+      slideCount > tariff.maxSlides
     ) {
       return NextResponse.json(
-        { error: `Количество слайдов: от ${MIN_SLIDES} до ${TARIFFS.standard.maxSlides}` },
+        { error: `Количество слайдов: от ${MIN_SLIDES} до ${tariff.maxSlides}` },
         { status: 400 }
       );
     }
@@ -68,7 +83,7 @@ export async function POST(req: Request) {
       originalOrderId: orderId,
       userId: user.id,
       email: user.email,
-      tariff: "standard",
+      tariff: tariffId,
       slideCount,
       topic,
       wishes: wishesResult.value,

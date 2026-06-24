@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { MIN_SLIDES, STYLES, StyleId, TARIFFS } from "@/lib/tariffs";
+import { MIN_SLIDES, STYLES, StyleId } from "@/lib/tariffs";
 import { SourceUploader } from "../SourceUploader";
 
 const STORYBOARD_MAX = 1000;
@@ -24,18 +24,20 @@ export function RegenerateForm({
   initialTopic,
   initialStyle,
   initialSlideCount,
+  maxSlides,
 }: {
   orderId: string;
   initialTopic: string;
   initialStyle: string;
   initialSlideCount: number;
+  maxSlides: number;
 }) {
   const [topic, setTopic] = useState(initialTopic);
   const [style, setStyle] = useState<StyleId>(
     STYLES[initialStyle as StyleId] ? (initialStyle as StyleId) : "business"
   );
   const [slideCount, setSlideCount] = useState(
-    Math.min(Math.max(initialSlideCount || MIN_SLIDES, MIN_SLIDES), TARIFFS.standard.maxSlides)
+    Math.min(Math.max(initialSlideCount || MIN_SLIDES, MIN_SLIDES), maxSlides)
   );
   const [wishes, setWishes] = useState("");
   const [storyboard, setStoryboard] = useState("");
@@ -97,7 +99,7 @@ export function RegenerateForm({
             id={`slides-${orderId}`}
             type="number"
             min={MIN_SLIDES}
-            max={TARIFFS.standard.maxSlides}
+            max={maxSlides}
             value={slideCount}
             onChange={(e) => setSlideCount(Number(e.target.value))}
             required

@@ -120,33 +120,45 @@ export function RegenerateForm({
           </select>
         </div>
       </div>
-      <div className="field">
-        <label>Исходная работа (.docx) — необязательно</label>
-        <p className="field-hint">
-          Новая тема? Загрузите другую работу — соберём презентацию из неё.
-        </p>
-        {uploadToken && <SourceUploader uploadToken={uploadToken} />}
-      </div>
-      <div className="field">
-        <label htmlFor={`storyboard-${orderId}`}>Сценарий по слайдам — необязательно</label>
-        <textarea
-          id={`storyboard-${orderId}`}
-          value={storyboard}
-          maxLength={STORYBOARD_MAX}
-          onChange={(e) => setStoryboard(e.target.value)}
-          placeholder="Слайд 1 — …; Слайд 2 — …"
-        />
-      </div>
-      <div className="field">
-        <label htmlFor={`wishes-${orderId}`}>Пожелания</label>
-        <textarea
-          id={`wishes-${orderId}`}
-          value={wishes}
-          maxLength={500}
-          onChange={(e) => setWishes(e.target.value)}
-          placeholder="Что изменить во второй версии"
-        />
-      </div>
+      {uploadToken && (
+        <details className="details-field">
+          <summary>+ Загрузить исходную работу .docx (необязательно)<span>▼</span></summary>
+          <div className="disclosure-body">
+            <div className="disclosure-hint">
+              Новая тема или другая работа? Загрузите .docx — ИИ возьмёт её текст и иллюстрации за основу.
+            </div>
+            <SourceUploader uploadToken={uploadToken} />
+          </div>
+        </details>
+      )}
+      <details className="details-field">
+        <summary>+ Сценарий по слайдам (необязательно)<span>▼</span></summary>
+        <div className="disclosure-body">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <textarea
+              id={`storyboard-${orderId}`}
+              value={storyboard}
+              maxLength={STORYBOARD_MAX}
+              onChange={(e) => setStoryboard(e.target.value)}
+              placeholder="Слайд 1 — Введение; Слайд 2 — Проблема; Слайд 3 — …"
+            />
+          </div>
+        </div>
+      </details>
+      <details className="details-field">
+        <summary>+ Пожелания (необязательно)<span>▼</span></summary>
+        <div className="disclosure-body">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <textarea
+              id={`wishes-${orderId}`}
+              value={wishes}
+              maxLength={500}
+              onChange={(e) => setWishes(e.target.value)}
+              placeholder="Тон, акцент, структура, что важно включить — любые пожелания к презентации"
+            />
+          </div>
+        </div>
+      </details>
       <button className="btn" type="submit" disabled={loading}>
         {loading ? "Запускаем..." : "Сгенерировать ещё раз"}
       </button>

@@ -494,6 +494,9 @@ input[type="range"]::-moz-range-thumb{width:20px;height:20px;border:0;border-rad
 .regen-form{border-top:1px solid var(--line);margin-top:18px;padding-top:2px}
 .regen-row{display:grid;grid-template-columns:140px 1fr;gap:12px}
 .regen-form .btn{max-width:280px}
+.regen-form .field{margin-bottom:12px}
+.regen-form .details-field{margin-bottom:8px}
+.regen-form .field textarea{min-height:64px}
 
 @media (max-width:620px){
   .account-nav,.account-order-main{align-items:stretch;flex-direction:column}

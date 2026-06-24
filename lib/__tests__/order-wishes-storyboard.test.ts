@@ -152,6 +152,7 @@ async function loadCheckoutRoute(): Promise<{
   const yookassaPath = path.join(activeRuntimeDir, "lib", "yookassa.js");
   const envPath = path.join(activeRuntimeDir, "lib", "env.js");
   const uploadsPath = path.join(activeRuntimeDir, "lib", "uploads.js");
+  const usersPath = path.join(activeRuntimeDir, "lib", "users.js");
   await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
   await fs.writeFile(
     ordersPath,
@@ -178,10 +179,15 @@ async function loadCheckoutRoute(): Promise<{
     uploadsPath,
     `exports.isUuid = (value) => /^[0-9a-f-]{36}$/i.test(value);`
   );
+  await fs.writeFile(
+    usersPath,
+    `exports.upsertUserByEmail = async (email) => ({ id: "user-id", email, role: "user", created_at: "" });`
+  );
   delete require.cache[ordersPath];
   delete require.cache[yookassaPath];
   delete require.cache[envPath];
   delete require.cache[uploadsPath];
+  delete require.cache[usersPath];
   (globalThis as unknown as { __checkoutCalls: typeof calls }).__checkoutCalls = calls;
 
   await transpileSource(
@@ -314,12 +320,15 @@ test("createOrder inserts wishes and storyboard", async () => {
   assert.match(sql, /topic, wishes, storyboard, style/);
   assert.deepEqual(params, [
     "user@example.com",
+    null,
     "basic",
     5,
     "Topic",
     "Пожелания",
     "Сториборд",
     "minimal",
+    "pending",
+    null,
   ]);
 });
 

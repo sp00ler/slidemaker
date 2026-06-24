@@ -316,7 +316,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
   }
 
   try {
-    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, title, expiresAt, secondUrl);
+    await sendDeckEmail(order.email, `${env.APP_URL}${fileRel}`, title, expiresAt, secondUrl, order);
   } catch (e) {
     console.error("order email delivery failed; manual resend required:", {
       orderId: order.id,

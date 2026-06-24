@@ -78,6 +78,16 @@ async function transpileSource(srcPath: string, outPath: string): Promise<void> 
 }
 
 async function loadMailer(): Promise<MailerModule> {
+  await fs.mkdir(path.join(runtimeOutDir, "lib"), { recursive: true });
+  await fs.writeFile(
+    path.join(runtimeOutDir, "lib", "auth.js"),
+    `exports.createLoginToken = async () => "login-token";`
+  );
+  await fs.writeFile(
+    path.join(runtimeOutDir, "lib", "users.js"),
+    `exports.upsertUserByEmail = async (email) => ({ id: "user-id", email, role: "user", created_at: "" });
+     exports.countUserOrders = async () => 1;`
+  );
   await transpileSource(
     path.join(process.cwd(), "lib", "env.ts"),
     path.join(runtimeOutDir, "lib", "env.js")

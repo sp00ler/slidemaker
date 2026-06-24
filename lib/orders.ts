@@ -10,6 +10,7 @@ export type OrderStatus =
 export interface OrderRow {
   id: string;
   email: string;
+  user_id: string | null;
   tariff: string;
   slide_count: number;
   topic: string;
@@ -18,6 +19,8 @@ export interface OrderRow {
   style: string;
   status: OrderStatus;
   file_path: string | null;
+  regen_used: boolean;
+  parent_order_id: string | null;
   created_at: string;
 }
 
@@ -29,19 +32,27 @@ export async function createOrder(data: {
   wishes: string | null;
   storyboard: string | null;
   style: string;
+  userId?: string | null;
+  status?: OrderStatus;
+  parentOrderId?: string | null;
 }): Promise<OrderRow> {
   const { rows } = await pool.query<OrderRow>(
-    `INSERT INTO orders (email, tariff, slide_count, topic, wishes, storyboard, style, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+    `INSERT INTO orders (
+       email, user_id, tariff, slide_count, topic, wishes, storyboard, style, status, parent_order_id
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       data.email,
+      data.userId ?? null,
       data.tariff,
       data.slideCount,
       data.topic,
       data.wishes,
       data.storyboard,
       data.style,
+      data.status ?? "pending",
+      data.parentOrderId ?? null,
     ]
   );
   return rows[0];
@@ -53,6 +64,88 @@ export async function getOrder(id: string): Promise<OrderRow | null> {
     [id]
   );
   return rows[0] ?? null;
+}
+
+export async function getOrdersByUser(userId: string): Promise<OrderRow[]> {
+  const { rows } = await pool.query<OrderRow>(
+    `SELECT * FROM orders
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+  return rows;
+}
+
+export async function claimRegeneration(orderId: string, userId: string): Promise<OrderRow | null> {
+  const { rows } = await pool.query<OrderRow>(
+    `UPDATE orders
+     SET regen_used = true
+     WHERE id = $1
+       AND user_id = $2
+       AND status = 'done'
+       AND regen_used = false
+     RETURNING *`,
+    [orderId, userId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function createRegenerationOrder(data: {
+  originalOrderId: string;
+  userId: string;
+  email: string;
+  tariff: string;
+  slideCount: number;
+  topic: string;
+  wishes: string | null;
+  storyboard: string | null;
+  style: string;
+}): Promise<OrderRow | null> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const claim = await client.query<OrderRow>(
+      `UPDATE orders
+       SET regen_used = true
+       WHERE id = $1
+         AND user_id = $2
+         AND status = 'done'
+         AND regen_used = false
+       RETURNING *`,
+      [data.originalOrderId, data.userId]
+    );
+
+    if (!claim.rows[0]) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    const created = await client.query<OrderRow>(
+      `INSERT INTO orders (
+         email, user_id, tariff, slide_count, topic, wishes, storyboard, style, status, parent_order_id
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'generating', $9)
+       RETURNING *`,
+      [
+        data.email,
+        data.userId,
+        data.tariff,
+        data.slideCount,
+        data.topic,
+        data.wishes,
+        data.storyboard,
+        data.style,
+        data.originalOrderId,
+      ]
+    );
+    await client.query("COMMIT");
+    return created.rows[0];
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // Атомарный «захват» заказа для генерации: только один вызов получит строку

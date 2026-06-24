@@ -5,6 +5,7 @@ import { createPayment } from "@/lib/yookassa";
 import { env } from "@/lib/env";
 import { parseOptionalText } from "@/lib/checkout-validation";
 import { isUuid } from "@/lib/uploads";
+import { upsertUserByEmail } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,8 +74,10 @@ export async function POST(req: Request) {
     }
     const orderSlideCount = tariff.manual ? 0 : slideCount;
 
+    const user = await upsertUserByEmail(email);
     const order = await createOrder({
-      email,
+      email: user.email,
+      userId: user.id,
       tariff: tariffId,
       slideCount: orderSlideCount,
       topic,

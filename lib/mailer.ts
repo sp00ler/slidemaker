@@ -1,6 +1,8 @@
 import nodemailer, { Transporter } from "nodemailer";
 import { env } from "@/lib/env";
 import type { OrderRow } from "@/lib/orders";
+import { createLoginToken } from "@/lib/auth";
+import { countUserOrders, upsertUserByEmail } from "@/lib/users";
 
 let transporter: Transporter | null = null;
 
@@ -34,15 +36,68 @@ export async function sendDeckEmail(
   downloadUrl: string,
   title: string,
   expiresAt: Date,
-  secondUrl?: string
+  secondUrl?: string,
+  order?: OrderRow
 ): Promise<void> {
   const from = process.env.MAIL_FROM || "SlideMaker <no-reply@slidemaker.ru>";
-  const { html, text } = renderDeckEmail(downloadUrl, title, expiresAt, secondUrl);
+  const user = order?.user_id ? null : await upsertUserByEmail(to);
+  const userId = order?.user_id ?? user?.id;
+  const loginToken = userId ? await createLoginToken(userId) : null;
+  const loginUrl = loginToken ? `${env.APP_URL}/login/verify?token=${loginToken}` : undefined;
+  const orderCount = userId ? await countUserOrders(userId).catch(() => 0) : 0;
+  const { html, text } = renderDeckEmail(
+    downloadUrl,
+    title,
+    expiresAt,
+    secondUrl,
+    loginUrl,
+    orderCount <= 1
+  );
 
   await getTransporter().sendMail({
     from,
     to,
     subject: `Ваша презентация готова: ${title}`,
+    text,
+    html,
+  });
+}
+
+export async function sendLoginEmail(to: string, loginUrl: string): Promise<void> {
+  const from = process.env.MAIL_FROM || "SlideMaker <no-reply@slidemaker.ru>";
+  const safeLoginUrl = escapeHtml(loginUrl);
+  const text =
+    `Здравствуйте!\n\n` +
+    `Вход в личный кабинет SlideMaker:\n${loginUrl}\n\n` +
+    `Ссылка действует 30 минут. Если вы не запрашивали вход, просто игнорируйте письмо.`;
+  const html =
+    `<!doctype html>` +
+    `<html><body style="margin:0;padding:0;background:#F3F4F6;">` +
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F3F4F6;margin:0;padding:24px 0;">` +
+    `<tr><td align="center" style="padding:0 12px;">` +
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#FFFFFF;border-collapse:collapse;">` +
+    `<tr><td style="padding:24px 28px 12px 28px;font-family:Arial,sans-serif;color:#111827;font-size:14px;font-weight:700;">SlideMaker</td></tr>` +
+    `<tr><td style="padding:8px 28px 0 28px;font-family:Arial,sans-serif;color:#111827;">` +
+    `<div style="font-size:28px;line-height:34px;font-weight:800;">Вход в кабинет</div>` +
+    `</td></tr>` +
+    `<tr><td style="padding:18px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:16px;line-height:24px;">` +
+    `Ссылка действует 30 минут и открывается один раз.` +
+    `</td></tr>` +
+    `<tr><td align="center" style="padding:26px 28px 18px 28px;">` +
+    `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">` +
+    `<tr><td bgcolor="#111827" style="background:#111827;border-radius:6px;text-align:center;">` +
+    `<a href="${safeLoginUrl}" target="_blank" style="display:block;padding:15px 26px;font-family:Arial,sans-serif;font-size:16px;line-height:18px;color:#FFFFFF;text-decoration:none;font-weight:700;">Войти в кабинет</a>` +
+    `</td></tr></table>` +
+    `</td></tr>` +
+    `<tr><td style="padding:0 28px 28px 28px;font-family:Arial,sans-serif;color:#6B7280;font-size:13px;line-height:20px;word-break:break-all;">` +
+    `Если кнопка не открылась:<br><a href="${safeLoginUrl}" style="color:#111827;text-decoration:underline;">${safeLoginUrl}</a>` +
+    `</td></tr>` +
+    `</table></td></tr></table></body></html>`;
+
+  await getTransporter().sendMail({
+    from,
+    to,
+    subject: "Вход в личный кабинет SlideMaker",
     text,
     html,
   });
@@ -133,13 +188,16 @@ export function renderDeckEmail(
   downloadUrl: string,
   title: string,
   expiresAt: Date,
-  secondUrl?: string
+  secondUrl?: string,
+  loginUrl?: string,
+  isFirstOrder = false
 ): { html: string; text: string } {
   const htmlTitle = escapeHtml(title);
   const htmlDownloadUrl = escapeHtml(downloadUrl);
   const expiresText = formatExpiresAt(expiresAt);
   const htmlExpiresText = escapeHtml(expiresText);
   const htmlSecondUrl = secondUrl ? escapeHtml(secondUrl) : "";
+  const htmlLoginUrl = loginUrl ? escapeHtml(loginUrl) : "";
 
   const text =
     `Здравствуйте!\n\n` +
@@ -150,6 +208,10 @@ export function renderDeckEmail(
     `Скачать вариант 1: ${downloadUrl}\n` +
     (secondUrl ? `Скачать вариант 2: ${secondUrl}\n` : "") +
     `\nСсылки действуют до ${expiresText} (1 неделя). Скачайте файлы вовремя.\n\n` +
+    (loginUrl
+      ? `${isFirstOrder ? "Вы зарегистрированы в личном кабинете." : "Ваши презентации доступны в личном кабинете."}\n` +
+        `Войти: ${loginUrl}\n\n`
+      : "") +
     `Спасибо, что воспользовались SlideMaker.`;
 
   const html =
@@ -200,6 +262,12 @@ export function renderDeckEmail(
     `<tr><td style="padding:20px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">` +
     `<strong>${secondUrl ? "Ссылки действуют" : "Ссылка действует"} до ${htmlExpiresText} (1 неделя).</strong><br>Скачайте ${secondUrl ? "файлы" : "файл"} вовремя.` +
     `</td></tr>` +
+    (loginUrl
+      ? `<tr><td style="padding:18px 28px 0 28px;font-family:Arial,sans-serif;color:#374151;font-size:14px;line-height:22px;">` +
+        `<strong>${isFirstOrder ? "Вы зарегистрированы в личном кабинете." : "Ваши презентации доступны в личном кабинете."}</strong><br>` +
+        `<a href="${htmlLoginUrl}" style="color:#111827;text-decoration:underline;">Войти в кабинет</a>` +
+        `</td></tr>`
+      : "") +
     `<tr><td style="padding:24px 28px 28px 28px;font-family:Arial,sans-serif;color:#6B7280;font-size:13px;line-height:20px;border-top:1px solid #E5E7EB;">` +
     `Спасибо, что воспользовались SlideMaker.` +
     `</td></tr>` +

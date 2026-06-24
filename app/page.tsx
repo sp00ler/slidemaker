@@ -754,30 +754,46 @@ function BlastLoader({
   }, [phase]);
 
   const label =
-    phase === "upload" ? `Загружаем файл` : BLAST_PHRASES[phraseIndex];
+    phase === "upload" ? `Загружаем · ${percent}%` : BLAST_PHRASES[phraseIndex];
 
   return (
-    <div className="blast" role="status" aria-live="polite">
-      <div className="blast-stage">
-        <div
-          className={`blast-ring ${phase === "process" ? "is-spin" : ""}`}
-          style={{ ["--p" as string]: `${percent}%` }}
-        >
-          <div className="blast-core">
-            {phase === "upload" ? (
-              <span className="blast-pct">{percent}%</span>
-            ) : (
-              <span className="blast-dot-pulse" />
-            )}
+    <div
+      className="blast"
+      role="status"
+      aria-live="polite"
+      aria-label={`${label}`}
+    >
+      <div className={`blast-scene ${phase === "process" ? "is-process" : ""}`}>
+        {/* документ-первоисточник */}
+        <div className="doc">
+          <div className="doc-fill" style={{ height: `${percent}%` }} />
+          <div className="doc-body">
+            <span className="doc-line" />
+            <span className="doc-line" />
+            <span className="doc-line short" />
+            <span className="doc-pic" />
+            <span className="doc-line" />
+            <span className="doc-line short" />
           </div>
-          <span className="blast-orbit blast-orbit-1" />
-          <span className="blast-orbit blast-orbit-2" />
-          <span className="blast-orbit blast-orbit-3" />
+          <div className="doc-scan" />
         </div>
-        <div className="blast-text">
-          <div className="blast-label">{label}</div>
-          <div className="blast-file">{fileName}</div>
+
+        {/* колода слайдов, в которую он превращается */}
+        <div className="deck">
+          <span className="deck-slide ds1" />
+          <span className="deck-slide ds2" />
+          <span className="deck-slide ds3" />
         </div>
+
+        {/* чипы-картинки, вылетающие из документа в слайды */}
+        <span className="chip ch1" />
+        <span className="chip ch2" />
+        <span className="chip ch3" />
+      </div>
+
+      <div className="blast-text">
+        <div className="blast-label">{label}</div>
+        <div className="blast-file">{fileName}</div>
       </div>
     </div>
   );

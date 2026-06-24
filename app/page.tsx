@@ -11,6 +11,7 @@ import {
 } from "react";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
 import { SourceUploader } from "./SourceUploader";
+import { BlastScene } from "./BlastScene";
 
 const WISHES_MAX = 2000;
 const AUTHOR_EMAIL = "custom@slidemaker.ru";
@@ -480,12 +481,7 @@ export default function Home() {
                 <div className="payment-amount">{tariff.price} ₽</div>
                 <h3>Переходим к оплате</h3>
                 <p>Не закрывайте вкладку, сейчас откроется страница ЮКассы.</p>
-                <div className="deck-loader" role="status" aria-label="Загрузка">
-                  <span className="deck-base" />
-                  <span className="deck-slide s1" />
-                  <span className="deck-slide s2" />
-                  <span className="deck-slide s3" />
-                </div>
+                <BlastScene processing />
               </div>
             ) : (
               <form className="card" onSubmit={handleSubmit}>

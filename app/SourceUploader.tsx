@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BlastScene } from "./BlastScene";
 
 export type SourceStatus = "empty" | "loading" | "ready" | "error";
 export type SourcePhase = "upload" | "process";
@@ -48,33 +49,7 @@ export function BlastLoader({
       aria-live="polite"
       aria-label={`${label}`}
     >
-      <div className={`blast-scene ${phase === "process" ? "is-process" : ""}`}>
-        {/* документ-первоисточник */}
-        <div className="doc">
-          <div className="doc-fill" style={{ height: `${percent}%` }} />
-          <div className="doc-body">
-            <span className="doc-line" />
-            <span className="doc-line" />
-            <span className="doc-line short" />
-            <span className="doc-pic" />
-            <span className="doc-line" />
-            <span className="doc-line short" />
-          </div>
-          <div className="doc-scan" />
-        </div>
-
-        {/* колода слайдов, в которую он превращается */}
-        <div className="deck">
-          <span className="deck-slide ds1" />
-          <span className="deck-slide ds2" />
-          <span className="deck-slide ds3" />
-        </div>
-
-        {/* чипы-картинки, вылетающие из документа в слайды */}
-        <span className="chip ch1" />
-        <span className="chip ch2" />
-        <span className="chip ch3" />
-      </div>
+      <BlastScene percent={percent} processing={phase === "process"} />
 
       <div className="blast-text">
         <div className="blast-label">{label}</div>

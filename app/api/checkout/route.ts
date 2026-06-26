@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { TARIFFS, STYLES, MIN_SLIDES, Tariff, StyleId } from "@/lib/tariffs";
-import { bindUploadFilesToOrder, createOrder } from "@/lib/orders";
+import { bindUploadFilesToOrder, createOrder, claimForGeneration } from "@/lib/orders";
 import { createPayment } from "@/lib/yookassa";
+import { processOrder } from "@/lib/generate";
+import { redeemPromo } from "@/lib/promo";
 import { env } from "@/lib/env";
 import { parseOptionalText } from "@/lib/checkout-validation";
 import { isUuid } from "@/lib/uploads";
@@ -24,6 +26,7 @@ export async function POST(req: Request) {
     const topic = String(body.topic || "").trim();
     const slideCount = Number(body.slideCount);
     const uploadToken = String(body.uploadToken || "").trim();
+    const promo = String(body.promo || "").trim();
     const wishesResult = parseOptionalText(body.wishes, MAX_WISHES_LENGTH, "Пожелания");
     const storyboardResult = parseOptionalText(
       body.storyboard,
@@ -88,6 +91,28 @@ export async function POST(req: Request) {
 
     if (uploadToken) {
       await bindUploadFilesToOrder(order.id, uploadToken);
+    }
+
+    // Тестовый промокод: одноразовый. Атомарно гасим код — если успешно,
+    // обходим оплату и повторяем ветку успешного вебхука (claim + генерация
+    // в фоне). Невалидный/использованный код — ошибка, оплату НЕ создаём.
+    if (promo) {
+      const ok = await redeemPromo(promo, order.id);
+      if (!ok) {
+        return NextResponse.json(
+          { error: "Промокод недействителен или уже использован" },
+          { status: 400 }
+        );
+      }
+      const claimed = await claimForGeneration(order.id);
+      if (claimed) {
+        processOrder(claimed).catch((err) =>
+          console.error("promo generation failed:", err)
+        );
+      }
+      return NextResponse.json({
+        confirmationUrl: `${env.APP_URL}/success?order=${order.id}`,
+      });
     }
 
     const { confirmationUrl } = await createPayment({

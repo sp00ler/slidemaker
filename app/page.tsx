@@ -141,6 +141,7 @@ export default function Home() {
   const [slideCount, setSlideCount] = useState(8);
   const [style, setStyle] = useState<StyleId>("business");
   const [wishes, setWishes] = useState("");
+  const [promo, setPromo] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -287,6 +288,7 @@ export default function Home() {
         slideCount?: number;
         wishes?: string;
         uploadToken?: string;
+        promo?: string;
       } = {
         email: cleanEmail,
         tariff: tariffId,
@@ -296,6 +298,7 @@ export default function Home() {
       };
       if (!isAuthor) body.slideCount = slideCount;
       if (!isAuthor && uploadToken) body.uploadToken = uploadToken;
+      if (promo.trim()) body.promo = promo.trim();
 
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -663,6 +666,26 @@ export default function Home() {
                       <div className={counterClass(wishes.length, WISHES_MAX)}>
                         {wishes.length} / {WISHES_MAX}
                       </div>
+                    </div>
+                  </div>
+                </details>
+
+                <details className="details-field">
+                  <summary>
+                    Промокод
+                    <span>▼</span>
+                  </summary>
+                  <div className="disclosure-body">
+                    <div className="field">
+                      <label htmlFor="promo">Промокод</label>
+                      <input
+                        id="promo"
+                        type="text"
+                        autoComplete="off"
+                        value={promo}
+                        onChange={(e) => setPromo(e.target.value)}
+                        placeholder="Если есть"
+                      />
                     </div>
                   </div>
                 </details>

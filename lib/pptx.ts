@@ -53,6 +53,94 @@ const THEMES: Record<string, Theme> = {
   },
 };
 
+// ── T4a: пользовательские prefs (orders.prefs JSONB, появится в T4c) ──────────
+// Подмножество, влияющее на рендер колоды. auto = prefs null (текущее поведение).
+export type DesignSpec = {
+  preset?: "academic" | "auto" | "custom";
+  workType?: "vkr" | "coursework" | "report" | "generic";
+  title?: { mode?: "auto" | "self" | "upload"; fileId?: string };
+  fonts?: {
+    heading?: { face?: string; size?: number; bold?: boolean; italic?: boolean };
+    body?: { face?: string; size?: number };
+  };
+  palette?: { bg?: string; text?: string; accent?: string };
+};
+
+type ResolvedFont = { face: string; size: number; bold: boolean; italic: boolean };
+
+// Разрешённая тема рендера: базовый Theme + шрифты/размеры из prefs + флаг academic.
+interface Style extends Theme {
+  headingFont: ResolvedFont;
+  bodyFont: ResolvedFont;
+  academic: boolean;
+}
+
+// Whitelist шрифтов (кириллица-совместимые, есть в Office/Windows). default Arial.
+const FONT_WHITELIST = new Set([
+  "Times New Roman",
+  "Arial",
+  "Tahoma",
+  "Verdana",
+  "Calibri",
+]);
+
+function sanitizeFace(face: string | undefined, fallback: string): string {
+  return face && FONT_WHITELIST.has(face) ? face : fallback;
+}
+
+// Academic default-пресет: белый фон, тёмные чернила, единственный accent
+// только на номера/штрихи/подчёркивания (см. docs/ex1.png, ex2.png).
+const ACADEMIC: Theme = {
+  bg: "FFFFFF",
+  titleBg: "FFFFFF",
+  primary: "1F3A5F",
+  accent: "1F3A5F",
+  heading: "1A1A1A",
+  text: "1A1A1A",
+  titleText: "1A1A1A",
+  subText: "555555",
+  font: "Arial",
+};
+
+// DesignSpec переопределяет базовый Theme пресета стилей (палитра/шрифты/размеры).
+export function themeFromPrefs(base: Theme, prefs?: DesignSpec): Style {
+  const academic = prefs?.preset === "academic";
+  const start: Theme = academic ? { ...ACADEMIC } : { ...base };
+
+  const pal = prefs?.palette;
+  if (pal?.bg) {
+    start.bg = pal.bg;
+    start.titleBg = pal.bg;
+  }
+  if (pal?.text) {
+    start.text = pal.text;
+    start.heading = pal.text;
+    start.titleText = pal.text;
+  }
+  if (pal?.accent) {
+    start.accent = pal.accent;
+    start.primary = pal.accent;
+  }
+
+  const headingFace = sanitizeFace(prefs?.fonts?.heading?.face, start.font);
+  const bodyFace = sanitizeFace(prefs?.fonts?.body?.face, headingFace);
+  const headingFont: ResolvedFont = {
+    face: headingFace,
+    size: prefs?.fonts?.heading?.size ?? (academic ? 32 : 28),
+    bold: prefs?.fonts?.heading?.bold ?? true,
+    italic: prefs?.fonts?.heading?.italic ?? false,
+  };
+  const bodyFont: ResolvedFont = {
+    face: bodyFace,
+    size: prefs?.fonts?.body?.size ?? (academic ? 24 : 18),
+    bold: false,
+    italic: false,
+  };
+  start.font = headingFace; // back-compat для мест, всё ещё читающих t.font
+
+  return { ...start, headingFont, bodyFont, academic };
+}
+
 // Размеры для LAYOUT_WIDE: 13.33 x 7.5 дюйма.
 const W = 13.33;
 const H = 7.5;
@@ -173,7 +261,7 @@ function fitContain(
   };
 }
 
-function renderTitle(slide: pptxgen.Slide, s: Slide, t: Theme) {
+function renderTitle(slide: pptxgen.Slide, s: Slide, t: Style) {
   slide.background = { color: t.titleBg };
   slide.addText(s.heading, {
     x: 0.9,
@@ -183,7 +271,7 @@ function renderTitle(slide: pptxgen.Slide, s: Slide, t: Theme) {
     fontSize: 40,
     bold: true,
     color: t.titleText,
-    fontFace: t.font,
+    fontFace: t.headingFont.face,
     align: "left",
     valign: "middle",
   });
@@ -197,13 +285,13 @@ function renderTitle(slide: pptxgen.Slide, s: Slide, t: Theme) {
       h: 1.2,
       fontSize: 20,
       color: t.subText,
-      fontFace: t.font,
+      fontFace: t.bodyFont.face,
       align: "left",
     });
   }
 }
 
-function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme, index: number) {
+function renderSection(slide: pptxgen.Slide, s: Slide, t: Style, index: number) {
   // Светлый фон вместо full-bleed accent. Крупный accent-номер + вертикальный бар.
   slide.background = { color: t.bg };
   const num = String(index + 1).padStart(2, "0");
@@ -219,7 +307,7 @@ function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme, index: number) 
     bold: true,
     color: t.accent,
     transparency: 82,
-    fontFace: t.font,
+    fontFace: t.headingFont.face,
     align: "left",
     valign: "middle",
   });
@@ -231,7 +319,7 @@ function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme, index: number) 
     fontSize: 40,
     bold: true,
     color: t.heading,
-    fontFace: t.font,
+    fontFace: t.headingFont.face,
     align: "left",
     valign: "middle",
   });
@@ -243,7 +331,7 @@ function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme, index: number) 
       h: 1.0,
       fontSize: 18,
       color: t.text,
-      fontFace: t.font,
+      fontFace: t.bodyFont.face,
       align: "left",
     });
   }
@@ -255,7 +343,7 @@ function contentLayout(variant: number): {
   headingX: number;
   headingY: number;
   bulletY: number;
-  decor: (slide: pptxgen.Slide, t: Theme) => void;
+  decor: (slide: pptxgen.Slide, t: Style) => void;
 } {
   switch (variant % 3) {
     case 1:
@@ -297,7 +385,7 @@ function contentLayout(variant: number): {
 function renderContent(
   slide: pptxgen.Slide,
   s: Slide,
-  t: Theme,
+  t: Style,
   hasImage: boolean,
   variant: number
 ) {
@@ -310,10 +398,11 @@ function renderContent(
     y: layout.headingY,
     w: W - layout.headingX - 0.7,
     h: 1.0,
-    fontSize: 28,
-    bold: true,
+    fontSize: t.headingFont.size,
+    bold: t.headingFont.bold,
+    italic: t.headingFont.italic,
     color: t.heading,
-    fontFace: t.font,
+    fontFace: t.headingFont.face,
     align: "left",
     fit: "shrink",
   });
@@ -327,9 +416,9 @@ function renderContent(
         text: b,
         options: {
           bullet: { code: "2022", indent: 18 },
-          fontSize: 18,
+          fontSize: t.bodyFont.size,
           color: t.text,
-          fontFace: t.font,
+          fontFace: t.bodyFont.face,
           breakLine: true,
           paraSpaceAfter: 10,
         },
@@ -345,9 +434,225 @@ function renderContent(
     h: 0.3,
     fontSize: 9,
     color: t.subText,
-    fontFace: t.font,
+    fontFace: t.bodyFont.face,
     align: "right",
   });
+}
+
+// ── Academic-лейауты (docs/ex1.png, ex2.png) ─────────────────────────────────
+// Общий заголовок: ALL-CAPS по центру + короткое accent-подчёркивание.
+function academicHeading(slide: pptxgen.Slide, s: Slide, t: Style) {
+  slide.addText(s.heading.toUpperCase(), {
+    x: 0.7,
+    y: 0.45,
+    w: W - 1.4,
+    h: 0.8,
+    fontSize: t.headingFont.size,
+    bold: true,
+    color: t.heading,
+    fontFace: t.headingFont.face,
+    align: "center",
+    valign: "middle",
+    charSpacing: 1,
+  });
+  // accent-подчёркивание по центру
+  slide.addShape("rect", { x: W / 2 - 1.4, y: 1.3, w: 2.8, h: 0.035, fill: { color: t.accent } });
+}
+
+// Тонкая рамка-бокс (1pt), прозрачная заливка.
+function academicBox(slide: pptxgen.Slide, region: Box, color: string) {
+  slide.addShape("rect", {
+    ...region,
+    fill: { type: "none" },
+    line: { color, width: 1 },
+  });
+}
+
+function renderAcademicTitle(slide: pptxgen.Slide, s: Slide, t: Style) {
+  slide.background = { color: t.bg };
+  slide.addText(s.heading.toUpperCase(), {
+    x: 0.9,
+    y: 2.4,
+    w: W - 1.8,
+    h: 1.6,
+    fontSize: t.headingFont.size + 8,
+    bold: true,
+    color: t.heading,
+    fontFace: t.headingFont.face,
+    align: "center",
+    valign: "middle",
+    charSpacing: 1,
+  });
+  slide.addShape("rect", { x: W / 2 - 1.6, y: 4.15, w: 3.2, h: 0.04, fill: { color: t.accent } });
+  if (s.subheading) {
+    slide.addText(s.subheading, {
+      x: 1.2,
+      y: 4.5,
+      w: W - 2.4,
+      h: 1.2,
+      fontSize: t.bodyFont.size,
+      color: t.text,
+      fontFace: t.bodyFont.face,
+      align: "center",
+    });
+  }
+}
+
+function renderAcademicSection(slide: pptxgen.Slide, s: Slide, t: Style) {
+  // Секция академ = центрированный ALL-CAPS заголовок в тонкой рамке, без заливки.
+  slide.background = { color: t.bg };
+  const region: Box = { x: 1.0, y: 2.6, w: W - 2.0, h: 2.3 };
+  academicBox(slide, region, t.text);
+  slide.addText(s.heading.toUpperCase(), {
+    ...region,
+    fontSize: t.headingFont.size + 4,
+    bold: true,
+    color: t.heading,
+    fontFace: t.headingFont.face,
+    align: "center",
+    valign: "middle",
+    charSpacing: 1,
+  });
+  slide.addShape("rect", { x: W / 2 - 1.4, y: region.y + region.h + 0.25, w: 2.8, h: 0.04, fill: { color: t.accent } });
+}
+
+function renderAcademicContent(
+  slide: pptxgen.Slide,
+  s: Slide,
+  t: Style,
+  hasImage: boolean,
+  variant: number
+) {
+  slide.background = { color: t.bg };
+  academicHeading(slide, s, t);
+
+  const bullets = s.bullets.filter((b) => b.trim().length > 0);
+  const region: Box = {
+    x: 0.7,
+    y: 1.75,
+    w: hasImage ? 5.9 : W - 1.4,
+    h: H - 1.75 - 0.45,
+  };
+
+  // hasImage не оставляет места двум колонкам → нумерованные блоки в левой части.
+  const mode = hasImage ? 0 : variant % 3;
+  if (bullets.length > 0) {
+    if (mode === 1) {
+      academicTwoColumns(slide, t, bullets, region);
+    } else if (mode === 2) {
+      academicFramed(slide, t, bullets, region);
+    } else {
+      academicNumbered(slide, t, bullets, region);
+    }
+  }
+
+  slide.addText("slidemaker.ru", {
+    x: W - 3.0,
+    y: H - 0.42,
+    w: 2.7,
+    h: 0.3,
+    fontSize: 9,
+    color: t.subText,
+    fontFace: t.bodyFont.face,
+    align: "right",
+  });
+}
+
+// Вариант 0 (ex1): нумерованные блоки с вертикальным accent-штрихом.
+function academicNumbered(slide: pptxgen.Slide, t: Style, bullets: string[], region: Box) {
+  const gap = 0.18;
+  const n = bullets.length;
+  const blockH = (region.h - gap * (n - 1)) / n;
+  bullets.forEach((b, i) => {
+    const y = region.y + i * (blockH + gap);
+    slide.addShape("rect", {
+      x: region.x,
+      y: y + 0.05,
+      w: 0.06,
+      h: Math.max(blockH - 0.1, 0.1),
+      fill: { color: t.accent },
+    });
+    slide.addText(String(i + 1), {
+      x: region.x + 0.16,
+      y,
+      w: 0.55,
+      h: blockH,
+      fontSize: t.bodyFont.size + 2,
+      bold: true,
+      color: t.accent,
+      fontFace: t.headingFont.face,
+      align: "left",
+      valign: "middle",
+    });
+    slide.addText(b, {
+      x: region.x + 0.8,
+      y,
+      w: region.w - 0.9,
+      h: blockH,
+      fontSize: t.bodyFont.size,
+      color: t.text,
+      fontFace: t.bodyFont.face,
+      align: "left",
+      valign: "middle",
+      fit: "shrink",
+    });
+  });
+}
+
+// Вариант 1 (ex2): двухколоночная сетка тонких боксов.
+function academicTwoColumns(slide: pptxgen.Slide, t: Style, bullets: string[], region: Box) {
+  const colGap = 0.4;
+  const colW = (region.w - colGap) / 2;
+  const half = Math.ceil(bullets.length / 2);
+  const cols = [bullets.slice(0, half), bullets.slice(half)];
+  const rows = Math.max(cols[0].length, cols[1].length, 1);
+  const rowGap = 0.2;
+  const boxH = (region.h - rowGap * (rows - 1)) / rows;
+  cols.forEach((col, ci) => {
+    const x = region.x + ci * (colW + colGap);
+    col.forEach((b, ri) => {
+      const y = region.y + ri * (boxH + rowGap);
+      academicBox(slide, { x, y, w: colW, h: boxH }, t.text);
+      slide.addText(b, {
+        x: x + 0.18,
+        y: y + 0.1,
+        w: colW - 0.36,
+        h: boxH - 0.2,
+        fontSize: t.bodyFont.size,
+        color: t.text,
+        fontFace: t.bodyFont.face,
+        align: "left",
+        valign: "middle",
+        fit: "shrink",
+      });
+    });
+  });
+}
+
+// Вариант 2: единый тонкий бокс-рамка вокруг маркированного списка.
+function academicFramed(slide: pptxgen.Slide, t: Style, bullets: string[], region: Box) {
+  academicBox(slide, region, t.text);
+  slide.addText(
+    bullets.map((b) => ({
+      text: b,
+      options: {
+        bullet: { code: "2022", indent: 18 },
+        fontSize: t.bodyFont.size,
+        color: t.text,
+        fontFace: t.bodyFont.face,
+        breakLine: true,
+        paraSpaceAfter: 10,
+      },
+    })),
+    {
+      x: region.x + 0.35,
+      y: region.y + 0.3,
+      w: region.w - 0.7,
+      h: region.h - 0.6,
+      valign: "top",
+      fit: "shrink",
+    }
+  );
 }
 
 function visualRegion(hasBullets: boolean): Box {
@@ -360,7 +665,7 @@ function visualRegion(hasBullets: boolean): Box {
 }
 
 // Подпись всегда ПОД полным регионом (не под вписанной картинкой) — не наезжает.
-function addCaption(slide: pptxgen.Slide, t: Theme, text: string, region: Box) {
+function addCaption(slide: pptxgen.Slide, t: Style, text: string, region: Box) {
   if (!text) return;
   slide.addText(text, {
     x: region.x,
@@ -369,7 +674,7 @@ function addCaption(slide: pptxgen.Slide, t: Theme, text: string, region: Box) {
     h: 0.45,
     fontSize: 12,
     color: t.subText,
-    fontFace: t.font,
+    fontFace: t.bodyFont.face,
     italic: true,
     fit: "shrink",
   });
@@ -378,7 +683,7 @@ function addCaption(slide: pptxgen.Slide, t: Theme, text: string, region: Box) {
 function renderAiVisual(
   pptx: pptxgen,
   slide: pptxgen.Slide,
-  t: Theme,
+  t: Style,
   visual: ResolvedVisual,
   hasBullets: boolean
 ) {
@@ -425,17 +730,38 @@ export async function buildPptx(
   style: string,
   outPath: string,
   slideImages?: Map<number, SlideImage>,
-  aiVisuals?: Map<number, ResolvedVisual>
+  aiVisuals?: Map<number, ResolvedVisual>,
+  prefs?: DesignSpec,
+  titleImage?: SlideImage
 ): Promise<void> {
-  const theme = THEMES[style] ?? THEMES.business;
+  const spec = themeFromPrefs(THEMES[style] ?? THEMES.business, prefs);
+  const titleMode = prefs?.title?.mode ?? "auto";
 
   const pptx = new pptxgen();
   pptx.layout = "LAYOUT_WIDE";
   pptx.author = "SlideMaker";
   pptx.title = deck.title;
 
+  // Титул: mode="upload" → загруженный PNG/JPG первым слайдом (вписан, без обрезки).
+  if (titleMode === "upload" && titleImage) {
+    const resolved = resolveSlideImagePath(titleImage.path);
+    if (resolved) {
+      const slide = pptx.addSlide();
+      slide.background = { color: spec.bg };
+      const fitted = fitContain({ x: 0, y: 0, w: W, h: H }, await sizeFromFile(resolved));
+      slide.addImage({
+        path: resolved,
+        ...fitted,
+        altText: titleImage.description ?? "",
+      });
+    }
+  }
+
   for (let index = 0; index < deck.slides.length; index++) {
     const s = deck.slides[index];
+    // mode="self"/"upload" → сгенерированный титульный слайд не рендерим.
+    if (s.layout === "title" && titleMode !== "auto") continue;
+
     const slide = pptx.addSlide();
     const image = s.layout === "content" ? slideImages?.get(index + 1) : undefined;
     const resolvedPath = image ? resolveSlideImagePath(image.path) : null;
@@ -444,21 +770,20 @@ export async function buildPptx(
       s.layout === "content" && !resolvedPath ? aiVisuals?.get(index + 1) : undefined;
     const bullets = s.bullets.filter((b) => b.trim().length > 0);
     const hasBullets = bullets.length > 0;
+    const hasImage = Boolean(resolvedPath) || Boolean(aiVisual);
+
     switch (s.layout) {
       case "title":
-        renderTitle(slide, s, theme);
+        if (spec.academic) renderAcademicTitle(slide, s, spec);
+        else renderTitle(slide, s, spec);
         break;
       case "section":
-        renderSection(slide, s, theme, index);
+        if (spec.academic) renderAcademicSection(slide, s, spec);
+        else renderSection(slide, s, spec, index);
         break;
       default: // content | conclusion
-        renderContent(
-          slide,
-          s,
-          theme,
-          Boolean(resolvedPath) || Boolean(aiVisual),
-          index
-        );
+        if (spec.academic) renderAcademicContent(slide, s, spec, hasImage, index);
+        else renderContent(slide, s, spec, hasImage, index);
         if (resolvedPath && image) {
           const region = visualRegion(hasBullets);
           const fitted = fitContain(region, await sizeFromFile(resolvedPath));
@@ -467,9 +792,9 @@ export async function buildPptx(
             ...fitted,
             altText: image.description ?? "",
           });
-          addCaption(slide, theme, image.description ?? "", region);
+          addCaption(slide, spec, image.description ?? "", region);
         } else if (aiVisual) {
-          renderAiVisual(pptx, slide, theme, aiVisual, hasBullets);
+          renderAiVisual(pptx, slide, spec, aiVisual, hasBullets);
         }
         break;
     }

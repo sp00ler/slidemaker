@@ -23,7 +23,17 @@ type PptxModule = {
     aiVisuals?: Map<
       number,
       { kind: "image"; data: string; alt: string; caption: string }
-    >
+    >,
+    prefs?: {
+      preset?: "academic" | "auto" | "custom";
+      title?: { mode?: "auto" | "self" | "upload"; fileId?: string };
+      fonts?: {
+        heading?: { face?: string; size?: number; bold?: boolean; italic?: boolean };
+        body?: { face?: string; size?: number };
+      };
+      palette?: { bg?: string; text?: string; accent?: string };
+    },
+    titleImage?: { path: string; description: string | null }
   ) => Promise<void>;
 };
 
@@ -202,4 +212,98 @@ test("buildPptx rotates content layouts so neighbors differ", async () => {
   const decor = slides.map((s) => JSON.stringify(s.shapes[0]));
   assert.notEqual(decor[0], decor[1], "slide 0 and 1 share layout");
   assert.notEqual(decor[1], decor[2], "slide 1 and 2 share layout");
+});
+
+// Собрать все fontFace из addText-вызовов слайда.
+function collectFaces(slide: { texts: unknown[][] }): string[] {
+  const faces: string[] = [];
+  for (const args of slide.texts) {
+    const opts = args[1] as { fontFace?: string } | undefined;
+    if (opts?.fontFace) faces.push(opts.fontFace);
+  }
+  return faces;
+}
+
+test("buildPptx prefs override fontFace from whitelist", async () => {
+  const { mod, capture } = await loadPptx();
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [
+        { layout: "title", heading: "T", subheading: "sub", bullets: [] },
+        { layout: "content", heading: "Body", subheading: "", bullets: ["one", "two"] },
+      ],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    undefined,
+    {
+      fonts: {
+        heading: { face: "Times New Roman" },
+        body: { face: "Tahoma" },
+      },
+    }
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{ texts: unknown[][] }>;
+  const faces = slides.flatMap(collectFaces);
+  assert.ok(faces.includes("Times New Roman"), "heading font not applied");
+  assert.ok(faces.includes("Tahoma"), "body font not applied");
+  assert.ok(!faces.includes("Calibri"), "base preset font leaked through");
+});
+
+test("buildPptx academic preset uses no colored background", async () => {
+  const { mod, capture } = await loadPptx();
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [
+        { layout: "title", heading: "T", subheading: "s", bullets: [] },
+        { layout: "section", heading: "Sec", subheading: "", bullets: [] },
+        { layout: "content", heading: "Body", subheading: "", bullets: ["a", "b", "c"] },
+      ],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    undefined,
+    { preset: "academic" }
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{ background: { color?: string } | null }>;
+  for (const s of slides) {
+    assert.equal(s.background?.color, "FFFFFF", "academic slide not white");
+  }
+});
+
+test("buildPptx title mode self omits generated title slide", async () => {
+  const { mod, capture } = await loadPptx();
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [
+        { layout: "title", heading: "T", subheading: "", bullets: [] },
+        { layout: "content", heading: "Body", subheading: "", bullets: ["x"] },
+        { layout: "conclusion", heading: "End", subheading: "", bullets: [] },
+      ],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    undefined,
+    { title: { mode: "self" } }
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  // 3 слайда в колоде, но title пропущен → 2 отрендерено.
+  assert.equal(capture.slides.length, 2, "title slide was not omitted");
 });

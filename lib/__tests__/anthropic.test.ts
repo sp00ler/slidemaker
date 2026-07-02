@@ -18,6 +18,17 @@ type Deck = {
   slides: Slide[];
 };
 
+type DesignSpec = {
+  preset?: "academic" | "auto" | "custom";
+  workType?: "vkr" | "coursework" | "report" | "generic";
+  title?: { mode?: "auto" | "self" | "upload"; fileId?: string };
+  fonts?: {
+    heading?: { face?: string; size?: number; bold?: boolean; italic?: boolean };
+    body?: { face?: string; size?: number };
+  };
+  palette?: { bg?: string; text?: string; accent?: string };
+};
+
 type AnthropicModule = {
   buildDeckPrompt: (params: {
     topic: string;
@@ -26,6 +37,7 @@ type AnthropicModule = {
     slideCount: number;
     wishes?: string | null;
     storyboard?: string | null;
+    design?: DesignSpec;
   }) => string;
   buildDeckSystemPrompt: () => string;
   buildTopUpPrompt: (params: {
@@ -35,6 +47,7 @@ type AnthropicModule = {
     missing: number;
     deck: Deck;
     wishes?: string | null;
+    design?: DesignSpec;
   }) => string;
   extractJson: (text: string) => string;
   normalizeDeck: (deck: Deck, slideCount: number) => Deck;
@@ -211,6 +224,142 @@ test("buildDeckPrompt strips delimiter tags from user text (injection guard)", a
 
   // только настоящий закрывающий делимитер, инъектированный вырезан
   assert.equal((prompt.match(/<\/user_wishes>/g) || []).length, 1);
+});
+
+test("buildDeckPrompt vkr enforces fixed block order (strict wording)", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+    design: { workType: "vkr" },
+  });
+
+  const positions = [
+    'Титульный слайд (layout "title").',
+    "«Цель работы и задачи»",
+    "проблемы/объекта работы",
+    "Этапы решения поставленных задач",
+    "«проведены…», «созданы…», «разработаны…»",
+    'Заключение (layout "conclusion").',
+  ].map((needle) => prompt.indexOf(needle));
+
+  for (const pos of positions) assert.notEqual(pos, -1);
+  for (let i = 1; i < positions.length; i++) {
+    assert.ok(positions[i] > positions[i - 1], `block ${i} out of order`);
+  }
+  assert.match(prompt, /цель сформулирована конкретно и измеримо/);
+});
+
+test("buildDeckPrompt coursework keeps order but softens wording", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+    design: { workType: "coursework" },
+  });
+
+  assert.match(prompt, /Структура курсовой работы/);
+  assert.match(prompt, /что в итоге получилось/);
+  assert.doesNotMatch(prompt, /«проведены…», «созданы…», «разработаны…»/);
+});
+
+test("buildDeckPrompt vkr skips title block when title.mode is not auto", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+    design: { workType: "vkr", title: { mode: "upload" } },
+  });
+
+  assert.doesNotMatch(prompt, /Титульный слайд \(layout "title"\)\./);
+  assert.match(prompt, /«Цель работы и задачи»/);
+});
+
+test("buildDeckPrompt leaves report/generic workType unconstrained", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+    design: { workType: "report" },
+  });
+
+  assert.doesNotMatch(prompt, /Структура ВКР/);
+  assert.doesNotMatch(prompt, /Структура курсовой работы/);
+});
+
+test("buildDeckPrompt academic preset caps bullets and locks given palette", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+    design: {
+      preset: "academic",
+      palette: { bg: "FFFFFF", text: "1A1A1A", accent: "1F3A5F" },
+    },
+  });
+
+  assert.match(prompt, /максимум 3 на слайд/);
+  assert.match(prompt, /≤8 слов/);
+  assert.match(prompt, /никаких англицизмов/);
+  assert.match(prompt, /bg "FFFFFF", ink "1A1A1A", accent "1F3A5F"/);
+});
+
+test("buildDeckPrompt academic preset without palette locks academic defaults", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+    design: { preset: "academic" },
+  });
+
+  assert.match(prompt, /максимум 3 на слайд/);
+  // Частичная/отсутствующая палитра дополняется academic-дефолтами — undefined в промпт не течёт.
+  assert.match(prompt, /bg "FFFFFF", ink "1A1A1A", accent "1F3A5F"/);
+  assert.doesNotMatch(prompt, /undefined/);
+});
+
+test("buildDeckPrompt without design has no vkr/academic blocks", async () => {
+  const { buildDeckPrompt } = await loadAnthropic();
+  const prompt = buildDeckPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    slideCount: 8,
+  });
+
+  assert.doesNotMatch(prompt, /Структура ВКР/);
+  assert.doesNotMatch(prompt, /Академический пресет/);
+});
+
+test("buildTopUpPrompt carries academic constraints and vkr order note", async () => {
+  const { buildTopUpPrompt } = await loadAnthropic();
+  const topUpPrompt = buildTopUpPrompt({
+    topic: "Тема",
+    styleLabel: "Деловой",
+    styleHint: "строгий",
+    missing: 2,
+    deck: deck([slide("title", "Title"), slide("conclusion", "Conclusion")]),
+    design: {
+      preset: "academic",
+      workType: "vkr",
+      palette: { bg: "FFFFFF", text: "1A1A1A", accent: "1F3A5F" },
+    },
+  });
+
+  assert.match(topUpPrompt, /максимум 3 на слайд/);
+  assert.match(topUpPrompt, /этапы решения» \/ «результат»/);
 });
 
 test("buildDeckPrompt omits user blocks when wishes and storyboard are empty", async () => {

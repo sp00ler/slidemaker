@@ -75,6 +75,19 @@ const TopUpSlidesSchema = z.union([
 export type Slide = z.infer<typeof SlideSchema>;
 export type Deck = z.infer<typeof DeckSchema>;
 
+// orders.prefs JSONB (T4c) — типы заведены здесь заранее, колонка появится позже.
+// preset "auto" / prefs=null = текущее поведение (модель сама решает всё).
+export type DesignSpec = {
+  preset?: "academic" | "auto" | "custom";
+  workType?: "vkr" | "coursework" | "report" | "generic";
+  title?: { mode?: "auto" | "self" | "upload"; fileId?: string };
+  fonts?: {
+    heading?: { face?: string; size?: number; bold?: boolean; italic?: boolean };
+    body?: { face?: string; size?: number };
+  };
+  palette?: { bg?: string; text?: string; accent?: string };
+};
+
 export function extractJson(text: string): string {
   let t = text.trim();
   // убираем возможные ```json ... ``` ограждения
@@ -256,6 +269,7 @@ export async function generateDeck(params: {
   variantHint?: string;
   sourceText?: string | null;
   sourceImages?: SourceImageInput[];
+  design?: DesignSpec;
 }): Promise<Deck> {
   const { topic, slideCount } = params;
   const style = (params.style as StyleId) in STYLES ? (params.style as StyleId) : "business";
@@ -273,6 +287,7 @@ export async function generateDeck(params: {
     variantHint: params.variantHint,
     sourceText: params.sourceText,
     sourceImageCount: sourceImages.length,
+    design: params.design,
   });
 
   const response = await client.messages.create({
@@ -298,6 +313,7 @@ export async function generateDeck(params: {
       missing,
       deck,
       wishes: params.wishes,
+      design: params.design,
     });
 
     try {
@@ -383,16 +399,18 @@ export function buildDeckPrompt(params: {
   variantHint?: string;
   sourceText?: string | null;
   sourceImageCount?: number;
+  design?: DesignSpec;
 }): string {
   const userBlocks = buildUserBlocks(params.slideCount, params.wishes, params.storyboard);
   const variantLine = params.variantHint ? `\n${params.variantHint}\n` : "";
   const sourceBlocks = buildSourceBlocks(params.sourceText, params.sourceImageCount ?? 0);
+  const designBlocks = buildWorkTypeBlock(params.design) + buildAcademicBlock(params.design);
 
   return `Создай структуру презентации.
 Тема: "${params.topic}"
 Стиль оформления: ${params.styleLabel} (${params.styleHint})
 Количество слайдов: ровно ${params.slideCount}.
-${userBlocks}${sourceBlocks}${variantLine}
+${userBlocks}${sourceBlocks}${variantLine}${designBlocks}
 
 Требования:
 - Первый слайд — титульный (layout "title"): heading = название темы, subheading = краткий подзаголовок, bullets = [].
@@ -444,6 +462,7 @@ export function buildTopUpPrompt(params: {
   missing: number;
   deck: Deck;
   wishes?: string | null;
+  design?: DesignSpec;
 }): string {
   const wishes = normalizeUserText(params.wishes);
   const wishesBlock = wishes
@@ -454,13 +473,19 @@ ${wishes}
 </user_wishes>
 `
     : "";
+  const academicBlock = buildAcademicBlock(params.design);
+  const workType = params.design?.workType;
+  const orderNote =
+    workType === "vkr" || workType === "coursework"
+      ? "\nЭто вставка перед заключением в ВКР/курсовую — сохраняй тематику блока «этапы решения» / «результат», порядок остальной структуры не нарушай.\n"
+      : "";
 
   return `Для презентации ниже не хватает ${params.missing} слайдов.
 Сгенерируй только недостающие содержательные слайды для вставки перед заключением.
 Не возвращай титульный слайд и не возвращай заключение.
 Тема: "${params.topic}"
 Стиль оформления: ${params.styleLabel} (${params.styleHint})
-${wishesBlock}
+${wishesBlock}${academicBlock}${orderNote}
 
 Каждому слайду добавь visual по тем же правилам: приоритет chart/diagram/photo НАД image; не выдумывай статистику; mermaid ≤10 узлов, узлов >5 → direction LR; image только когда остальное не подходит и обязательно light background, flat/minimal editorial illustration, no photorealism, no dark scenes; alt для photo/image.
 
@@ -547,6 +572,51 @@ ${text}
   }
 
   return blocks.length ? `\n${blocks.join("\n\n")}\n` : "";
+}
+
+// PDF-правила п.14: ВКР/курсовая — фиксированный порядок блоков. vkr = строгие
+// формулировки (цель измерима, результат глаголами "проведены/созданы/разработаны"),
+// coursework = тот же порядок, мягче формулировки. report/generic — без ограничений.
+function buildWorkTypeBlock(design?: DesignSpec): string {
+  const workType = design?.workType;
+  if (workType !== "vkr" && workType !== "coursework") return "";
+
+  const strict = workType === "vkr";
+  const titleAuto = (design?.title?.mode ?? "auto") === "auto";
+  const steps: string[] = [];
+
+  if (titleAuto) steps.push('Титульный слайд (layout "title").');
+  steps.push(
+    strict
+      ? '«Цель работы и задачи»: цель сформулирована конкретно и измеримо (что сделать, когда, какими методами, где); задачи — нумерованным списком в bullets.'
+      : '«Цель работы и задачи»: коротко что и зачем делали; задачи — нумерованным списком в bullets.'
+  );
+  steps.push("Описание проблемы/объекта работы.");
+  steps.push("Этапы решения поставленных задач.");
+  steps.push(
+    strict
+      ? "Полученный конкретный результат — формулировки «проведены…», «созданы…», «разработаны…» и т.п."
+      : "Полученный результат работы — что в итоге получилось."
+  );
+  steps.push('Заключение (layout "conclusion").');
+
+  return `\nСтруктура ${strict ? "ВКР" : "курсовой работы"} — порядок блоков ниже обязателен, не меняй и не пропускай (при избытке слайдов можно несколько слайдов на блок, порядок блоков не нарушать):\n${steps
+    .map((s, i) => `${i + 1}. ${s}`)
+    .join("\n")}\n`;
+}
+
+// Академический пресет (PDF п.3, п.7, п.12-13): скупой текст, без англицизмов,
+// палитра фиксирована пользователем — модель её не придумывает.
+function buildAcademicBlock(design?: DesignSpec): string {
+  if (design?.preset !== "academic") return "";
+
+  // Частичная палитра дополняется academic-дефолтами, чтобы в промпт не утёк undefined.
+  const bg = design.palette?.bg ?? "FFFFFF";
+  const ink = design.palette?.text ?? "1A1A1A";
+  const accent = design.palette?.accent ?? "1F3A5F";
+  const paletteLine = `Обязательная палитра — верни ТОЧНО эти значения в поле palette, не меняй: bg "${bg}", ink "${ink}", accent "${accent}"; surface — светлый оттенок bg (или сам bg), muted — нейтральный серый, accent2 не используй (совпадает с accent). Accent — только для номеров/штрихов/подчёркиваний, никогда для заливки фона.\n`;
+
+  return `\nАкадемический пресет — эти ограничения ПЕРЕОПРЕДЕЛЯЮТ общие правила по буллетам и палитре ниже:\n- буллеты: максимум 3 на слайд, каждый ≤8 слов (тело 24–28pt должно вмещаться без переполнения);\n- никаких англицизмов и сокращений, кроме общепринятых (USB, CPU и т.п.);\n- минимум декора, ALL-CAPS только в заголовках слайдов.\n${paletteLine}`;
 }
 
 function normalizeUserText(value?: string | null): string {

@@ -89,6 +89,7 @@ export async function POST(req: Request) {
       wishes: wishesResult.value,
       storyboard: storyboardResult.value,
       style,
+      prefs: original.prefs,
     });
 
     if (!order) {

@@ -13,6 +13,7 @@ type OrderStub = {
   id: string;
   user_id: string | null;
   tariff: string;
+  prefs?: unknown;
 };
 
 type RegenerateCalls = {
@@ -204,6 +205,7 @@ test("regenerate uses basic tariff slide cap", async () => {
     wishes: null,
     storyboard: null,
     style: "minimal",
+    prefs: undefined,
   });
 });
 

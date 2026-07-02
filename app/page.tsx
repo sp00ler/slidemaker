@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { MIN_SLIDES, STYLES, StyleId, TARIFFS, Tariff } from "@/lib/tariffs";
+import { DESIGN_PRESETS, FONT_WHITELIST, type DesignSpec, type DesignPreset, type TitleMode, type WorkType } from "@/lib/design";
 import { SourceUploader } from "./SourceUploader";
 import { BlastScene } from "./BlastScene";
 
@@ -18,6 +19,7 @@ const AUTHOR_EMAIL = "custom@slidemaker.ru";
 const MAX_UPLOAD_SLIDES = 15;
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME = ["image/png", "image/jpeg", "image/webp"] as const;
+const OFFICE_THEME_IDS = ["officeBlue", "officeGreen", "officeGray", "officeBurgundy", "officePurple"] as const;
 
 type UploadStatus =
   | "empty"
@@ -140,6 +142,19 @@ export default function Home() {
   const [topic, setTopic] = useState("");
   const [slideCount, setSlideCount] = useState(8);
   const [style, setStyle] = useState<StyleId>("business");
+  const [designPreset, setDesignPreset] = useState<DesignPreset>("academic");
+  const [workType, setWorkType] = useState<WorkType>("generic");
+  const [titleMode, setTitleMode] = useState<TitleMode>("auto");
+  const [headingFace, setHeadingFace] = useState("Arial");
+  const [bodyFace, setBodyFace] = useState("Arial");
+  const [headingSize, setHeadingSize] = useState(32);
+  const [bodySize, setBodySize] = useState(24);
+  const [paletteBg, setPaletteBg] = useState("#FFFFFF");
+  const [paletteText, setPaletteText] = useState("#1A1A1A");
+  const [paletteAccent, setPaletteAccent] = useState("#1F3A5F");
+  const [titleUploadName, setTitleUploadName] = useState("");
+  const [titleUploadError, setTitleUploadError] = useState("");
+  const [titleUploading, setTitleUploading] = useState(false);
   const [wishes, setWishes] = useState("");
   const [promo, setPromo] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -256,6 +271,64 @@ export default function Home() {
     }
   }
 
+  function buildPrefs(): DesignSpec | null {
+    if (designPreset === "auto") return null;
+    return {
+      preset: designPreset,
+      workType,
+      title: { mode: titleMode },
+      fonts: {
+        heading: { face: headingFace, size: headingSize },
+        body: { face: bodyFace, size: bodySize },
+      },
+      palette: {
+        bg: paletteBg,
+        text: paletteText,
+        accent: paletteAccent,
+      },
+    };
+  }
+
+  function applyOfficeTheme(id: (typeof OFFICE_THEME_IDS)[number] | "academic") {
+    const theme = DESIGN_PRESETS[id].palette;
+    setPaletteBg(`#${theme.bg}`);
+    setPaletteText(`#${theme.text}`);
+    setPaletteAccent(`#${theme.accent}`);
+  }
+
+  async function uploadTitleFile(file: File | undefined) {
+    if (!file || !uploadToken || titleUploading) return;
+    setTitleUploadError("");
+    if (file.type !== "image/png") {
+      setTitleUploadError("Титульный слайд нужен в PNG");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_SIZE) {
+      setTitleUploadError("Файл больше 5 МБ");
+      return;
+    }
+
+    setTitleUploading(true);
+    try {
+      const form = new FormData();
+      form.append("uploadToken", uploadToken);
+      form.append("kind", "title");
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setTitleUploadError(data.error || "Не удалось загрузить титул");
+        return;
+      }
+      setTitleUploadName(file.name);
+      setTitleMode("upload");
+    } catch {
+      setTitleUploadError("Не удалось отправить файл. Проверьте интернет.");
+    } finally {
+      setTitleUploading(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -289,12 +362,14 @@ export default function Home() {
         wishes?: string;
         uploadToken?: string;
         promo?: string;
+        prefs?: DesignSpec | null;
       } = {
         email: cleanEmail,
         tariff: tariffId,
         topic: cleanTopic,
         style,
         wishes: cleanWishes,
+        prefs: buildPrefs(),
       };
       if (!isAuthor) body.slideCount = slideCount;
       if (!isAuthor && uploadToken) body.uploadToken = uploadToken;
@@ -571,7 +646,7 @@ export default function Home() {
                     </div>
 
                     <div className="field">
-                      <label>Стиль оформления</label>
+                      <label>Стиль повествования</label>
                       <div className="styles">
                         {(Object.keys(STYLES) as StyleId[]).map((id) => (
                           <button
@@ -587,43 +662,135 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
-                  </>
-                )}
 
-                {!isAuthor && uploadToken && (
-                  <details className="details-field">
-                    <summary>
-                      + Собрать из готовой работы .docx (необязательно)
-                      <span>▼</span>
-                    </summary>
-                    <div className="disclosure-body">
-                      <div className="disclosure-hint">
-                        Загрузите готовую работу (.docx) — реферат, диплом, статью.
-                        ИИ возьмёт её текст за основу и подберёт из неё подходящие
-                        картинки, графики и схемы для слайдов.
+                    <div className="field">
+                      <label>Оформление</label>
+                      <div className="styles">
+                        {([
+                          ["academic", "Академический", "для ВКР, курсовых, докладов"],
+                          ["auto", "ИИ решает", "палитра и шрифты по теме"],
+                          ["custom", "Свои настройки", "шрифт, размер, цвета"],
+                        ] as const).map(([id, label, desc]) => (
+                          <button
+                            key={id}
+                            className={`style-opt ${designPreset === id ? "active" : ""}`}
+                            type="button"
+                            onClick={() => setDesignPreset(id)}
+                          >
+                            <div className="style-label">{label}</div>
+                            <div className="style-desc">{desc}</div>
+                          </button>
+                        ))}
                       </div>
-                      <SourceUploader uploadToken={uploadToken} />
                     </div>
-                  </details>
-                )}
 
-                {!isAuthor && uploadToken && (
-                  <details className="details-field">
-                    <summary>
-                      + Добавить свои картинки к слайдам (необязательно)
-                      <span>▼</span>
-                    </summary>
-                    <div className="disclosure-body">
-                      <SlideUploader
-                        slideCount={slideCount}
-                        uploadToken={uploadToken}
-                        slots={slots}
-                        setSlots={setSlots}
-                        unlockedSlide={unlockedSlide}
-                        setUnlockedSlide={setUnlockedSlide}
-                      />
+                    <div className="field">
+                      <label htmlFor="workType">Тип работы</label>
+                      <select id="workType" value={workType} onChange={(e) => setWorkType(e.target.value as WorkType)}>
+                        <option value="generic">Обычная презентация</option>
+                        <option value="vkr">ВКР / диплом</option>
+                        <option value="coursework">Курсовая</option>
+                        <option value="report">Доклад / реферат</option>
+                      </select>
                     </div>
-                  </details>
+
+                    <div className="field">
+                      <label>Первый слайд</label>
+                      <div className="styles">
+                        {([
+                          ["auto", "Сгенерировать", "титул сделает ИИ"],
+                          ["self", "Оформлю сам", "без титульного слайда"],
+                          ["upload", "Загрузить PNG", "готовый титул первым"],
+                        ] as const).map(([id, label, desc]) => (
+                          <button key={id} className={`style-opt ${titleMode === id ? "active" : ""}`} type="button" onClick={() => setTitleMode(id)}>
+                            <div className="style-label">{label}</div>
+                            <div className="style-desc">{desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                      {titleMode === "upload" && uploadToken && (
+                        <div className="field" style={{ marginTop: "12px" }}>
+                          <label className="slide-action">
+                            {titleUploading ? "загружаем..." : titleUploadName || "выбрать PNG-титул"}
+                            <input type="file" accept="image/png" disabled={titleUploading} onChange={(e) => uploadTitleFile(e.target.files?.[0])} />
+                          </label>
+                          {titleUploadError && <div className="slide-error">{titleUploadError}</div>}
+                        </div>
+                      )}
+                    </div>
+
+                    {designPreset === "custom" && (
+                      <details className="details-field">
+                        <summary>Свои настройки оформления <span>▼</span></summary>
+                        <div className="disclosure-body">
+                          <div className="field">
+                            <label>Шрифты</label>
+                            <div className="slider-row">
+                              <select value={headingFace} onChange={(e) => setHeadingFace(e.target.value)}>
+                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
+                              </select>
+                              <select value={bodyFace} onChange={(e) => setBodyFace(e.target.value)}>
+                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="field">
+                            <label>Размеры: заголовок {headingSize} pt · текст {bodySize} pt</label>
+                            <div className="slider-row">
+                              <input type="number" min={16} max={40} value={headingSize} onChange={(e) => setHeadingSize(Number(e.target.value))} />
+                              <input type="number" min={16} max={40} value={bodySize} onChange={(e) => setBodySize(Number(e.target.value))} />
+                            </div>
+                          </div>
+                          <div className="field">
+                            <label>Палитра</label>
+                            <div className="slider-row">
+                              <input type="text" value={paletteBg} onChange={(e) => setPaletteBg(e.target.value)} placeholder="#FFFFFF" />
+                              <input type="text" value={paletteText} onChange={(e) => setPaletteText(e.target.value)} placeholder="#1A1A1A" />
+                              <input type="text" value={paletteAccent} onChange={(e) => setPaletteAccent(e.target.value)} placeholder="#1F3A5F" />
+                            </div>
+                            <div className="styles" style={{ marginTop: "10px" }}>
+                              {OFFICE_THEME_IDS.map((id) => (
+                                <button key={id} className="style-opt" type="button" onClick={() => applyOfficeTheme(id)}>
+                                  <div className="style-label">{DESIGN_PRESETS[id].label}</div>
+                                  <div className="style-desc">#{DESIGN_PRESETS[id].palette.accent}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                    )}
+
+                    {uploadToken && (
+                      <details className="details-field">
+                        <summary>+ Собрать из готовой работы .docx (необязательно) <span>▼</span></summary>
+                        <div className="disclosure-body">
+                          <div className="disclosure-hint">
+                            Загрузите готовую работу (.docx) — реферат, диплом, статью.
+                            ИИ возьмёт её текст за основу и подберёт из неё подходящие
+                            картинки, графики и схемы для слайдов.
+                          </div>
+                          <SourceUploader uploadToken={uploadToken} />
+                        </div>
+                      </details>
+                    )}
+
+                    {uploadToken && (
+                      <details className="details-field">
+                        <summary>+ Добавить свои картинки к слайдам (необязательно) <span>▼</span></summary>
+                        <div className="disclosure-body">
+                          <SlideUploader
+                            slideCount={slideCount}
+                            uploadToken={uploadToken}
+                            slots={slots}
+                            setSlots={setSlots}
+                            unlockedSlide={unlockedSlide}
+                            setUnlockedSlide={setUnlockedSlide}
+                          />
+                        </div>
+                      </details>
+                    )}
+                  </>
                 )}
 
                 {isAuthor && (

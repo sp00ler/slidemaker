@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { STYLES, StyleId } from "@/lib/tariffs";
+import type { DesignSpec } from "@/lib/design";
 
 const client = new Anthropic(); // ключ берётся из ANTHROPIC_API_KEY
 
@@ -74,19 +75,6 @@ const TopUpSlidesSchema = z.union([
 
 export type Slide = z.infer<typeof SlideSchema>;
 export type Deck = z.infer<typeof DeckSchema>;
-
-// orders.prefs JSONB (T4c) — типы заведены здесь заранее, колонка появится позже.
-// preset "auto" / prefs=null = текущее поведение (модель сама решает всё).
-export type DesignSpec = {
-  preset?: "academic" | "auto" | "custom";
-  workType?: "vkr" | "coursework" | "report" | "generic";
-  title?: { mode?: "auto" | "self" | "upload"; fileId?: string };
-  fonts?: {
-    heading?: { face?: string; size?: number; bold?: boolean; italic?: boolean };
-    body?: { face?: string; size?: number };
-  };
-  palette?: { bg?: string; text?: string; accent?: string };
-};
 
 export function extractJson(text: string): string {
   let t = text.trim();

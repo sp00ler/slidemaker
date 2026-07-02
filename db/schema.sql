@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS orders (
   wishes      text,
   storyboard  text,
   style       text        NOT NULL,                 -- 'business' | 'creative' | 'minimal'
+  prefs       jsonb,                              -- оформление заказа (DesignSpec) или NULL = ИИ решает
   status      text        NOT NULL DEFAULT 'pending', -- pending | generating | done | error
   file_path   text,
   regen_used  boolean     NOT NULL DEFAULT false,

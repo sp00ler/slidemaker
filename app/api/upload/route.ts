@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveUpload, saveSourceUpload, UploadError } from "@/lib/uploads";
+import { saveUpload, saveSourceUpload, saveTitleUpload, UploadError } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,11 @@ export async function POST(req: Request) {
     if (kind === "source") {
       await saveSourceUpload({ uploadToken, file: files[0] });
       return NextResponse.json({ ok: true, kind: "source" });
+    }
+
+    if (kind === "title") {
+      await saveTitleUpload({ uploadToken, file: files[0] });
+      return NextResponse.json({ ok: true, kind: "title" });
     }
 
     const result = await saveUpload({

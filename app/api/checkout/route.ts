@@ -5,7 +5,7 @@ import { createPayment } from "@/lib/yookassa";
 import { processOrder } from "@/lib/generate";
 import { redeemPromo } from "@/lib/promo";
 import { env } from "@/lib/env";
-import { parseOptionalText } from "@/lib/checkout-validation";
+import { parseDesignPrefs, parseOptionalText } from "@/lib/checkout-validation";
 import { isUuid } from "@/lib/uploads";
 import { upsertUserByEmail } from "@/lib/users";
 
@@ -33,6 +33,7 @@ export async function POST(req: Request) {
       MAX_STORYBOARD_LENGTH,
       "Сториборд"
     );
+    const prefsResult = parseDesignPrefs(body.prefs);
 
     const tariff = TARIFFS[tariffId];
     if (!tariff) {
@@ -52,6 +53,9 @@ export async function POST(req: Request) {
     }
     if (storyboardResult.error) {
       return NextResponse.json({ error: storyboardResult.error }, { status: 400 });
+    }
+    if (prefsResult.error) {
+      return NextResponse.json({ error: prefsResult.error }, { status: 400 });
     }
     if (tariff.manual && !wishesResult.value) {
       return NextResponse.json(
@@ -87,6 +91,7 @@ export async function POST(req: Request) {
       wishes: wishesResult.value,
       storyboard: storyboardResult.value,
       style,
+      prefs: prefsResult.value,
     });
 
     if (uploadToken) {

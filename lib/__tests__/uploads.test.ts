@@ -14,6 +14,10 @@ type UploadsModule = {
     file: File;
     description: string | null;
   }) => Promise<{ slideNumber: number }>;
+  saveTitleUpload: (input: {
+    uploadToken: string;
+    file: File;
+  }) => Promise<{ ok: true }>;
   validateUploadInput: (input: {
     uploadToken: string;
     slideNumber: number;
@@ -182,4 +186,27 @@ test("bindUploadFilesToOrder links files by upload token", async () => {
     "22222222-2222-4222-8222-222222222222",
     "11111111-1111-4111-8111-111111111111",
   ]);
+});
+
+test("saveTitleUpload stores PNG and issues valid parameterized SQL", async () => {
+  const { mod, calls } = await loadUploads();
+  const token = "33333333-3333-4333-8333-333333333333";
+  // минимальный PNG: сигнатура + мусорное тело, detectImageMime смотрит только magic bytes
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+  const file = new File([png], "title.png", { type: "image/png" });
+
+  try {
+    await mod.saveTitleUpload({ uploadToken: token, file });
+
+    // SELECT существующего титула + INSERT новой строки; SQL параметризован, без огрызков комментариев
+    const insert = calls.find(([sql]) => String(sql).includes("INSERT INTO order_files"));
+    assert.ok(insert, "insert query missing");
+    const [sql, params] = insert as [string, unknown[]];
+    assert.match(sql, /VALUES \(\$1, NULL, \$2, \$3, 'image\/png', \$4, \$5, 'title'\)/);
+    assert.doesNotMatch(sql, /\/\//);
+    assert.equal((params as unknown[])[0], token);
+    assert.equal((params as unknown[]).length, 5);
+  } finally {
+    await fs.rm(path.join(process.cwd(), "uploads", token), { recursive: true, force: true });
+  }
 });

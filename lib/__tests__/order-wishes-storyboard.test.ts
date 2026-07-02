@@ -33,6 +33,9 @@ type CheckoutModule = {
     maxLength: number,
     label: string
   ) => { value: string | null; error?: string };
+  parseDesignPrefs: (
+    value: unknown
+  ) => { value: unknown | null; error?: string };
 };
 
 type CheckoutRouteModule = {
@@ -315,6 +318,24 @@ test("checkout optional text validator rejects oversized values", async () => {
   assert.deepEqual(parseOptionalText("  ok  ", 500, "Пожелания"), { value: "ok" });
 });
 
+
+test("checkout design prefs validator rejects invalid font size and hex", async () => {
+  const { parseDesignPrefs } = await loadCheckout();
+
+  assert.match(
+    parseDesignPrefs({ preset: "custom", fonts: { body: { face: "Comic Sans" } } }).error ?? "",
+    /Invalid option/
+  );
+  assert.match(
+    parseDesignPrefs({ preset: "custom", fonts: { body: { size: 41 } } }).error ?? "",
+    /16 до 40/
+  );
+  assert.match(
+    parseDesignPrefs({ preset: "custom", palette: { accent: "red" } }).error ?? "",
+    /#RRGGBB/
+  );
+  assert.deepEqual(parseDesignPrefs({ preset: "auto" }), { value: null });
+});
 test("createOrder inserts wishes and storyboard", async () => {
   const { mod, calls } = await loadOrders();
 
@@ -330,7 +351,7 @@ test("createOrder inserts wishes and storyboard", async () => {
 
   assert.equal(calls.length, 1);
   const [sql, params] = calls[0] as [string, unknown[]];
-  assert.match(sql, /topic, wishes, storyboard, style/);
+  assert.match(sql, /topic, wishes, storyboard, style, prefs/);
   assert.deepEqual(params, [
     "user@example.com",
     null,
@@ -340,6 +361,7 @@ test("createOrder inserts wishes and storyboard", async () => {
     "Пожелания",
     "Сториборд",
     "minimal",
+    null,
     "pending",
     null,
   ]);

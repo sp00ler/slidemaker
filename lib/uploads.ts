@@ -10,6 +10,7 @@ export const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 // изображения.
 export const MAX_SOURCE_SIZE = 25 * 1024 * 1024;
 export const SOURCE_SLIDE_NUMBER = 0; // sentinel: source-строка не привязана к слайду
+export const TITLE_SLIDE_NUMBER = 0; // sentinel: title PNG не привязан к content-слайду
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -200,6 +201,64 @@ export async function saveUpload(input: UploadFileInput): Promise<{ slideNumber:
   return { slideNumber: input.slideNumber };
 }
 
+
+export async function saveTitleUpload(input: {
+  uploadToken: string;
+  file: File;
+}): Promise<{ ok: true }> {
+  if (!isUuid(input.uploadToken)) {
+    throw new UploadError("Некорректный uploadToken");
+  }
+  if (input.file.size <= 0 || input.file.size > MAX_UPLOAD_SIZE) {
+    throw new UploadError("Файл должен быть не больше 5 МБ");
+  }
+  if (input.file.type !== "image/png") {
+    throw new UploadError("Титульный слайд должен быть PNG");
+  }
+
+  const bytes = new Uint8Array(await input.file.arrayBuffer());
+  if (detectImageMime(bytes) !== "image/png") {
+    throw new UploadError("Файл не похож на PNG");
+  }
+
+  const old = await pool.query<{ stored_path: string }>(
+    `SELECT stored_path FROM order_files
+     WHERE upload_token = $1 AND kind = 'title'
+     LIMIT 1`,
+    [input.uploadToken]
+  );
+
+  const token = crypto.randomBytes(8).toString("hex");
+  const fileName = `title_${token}.png`;
+  const { dir, absolutePath, relativePath } = resolveUploadPath(input.uploadToken, fileName);
+
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(absolutePath, bytes);
+
+  if (old.rows[0]) {
+    await pool.query(
+      `UPDATE order_files
+       SET stored_path = $2, mime = 'image/png', size = $3, description = $4, created_at = now()
+       WHERE upload_token = $1 AND kind = 'title'`,
+      [input.uploadToken, relativePath, input.file.size, "Титульный слайд"]
+    );
+    await removeStoredUpload(old.rows[0].stored_path).catch(() => {});
+  } else {
+    await pool.query(
+      `INSERT INTO order_files
+       (upload_token, order_id, slide_number, stored_path, mime, size, description, kind)
+       VALUES ($1, NULL, $2, $3, 'image/png', $4, $5, 'title')`,
+      [input.uploadToken, TITLE_SLIDE_NUMBER, relativePath, input.file.size, "Титульный слайд"]
+    );
+  }
+
+  console.info("title png stored:", {
+    uploadToken: input.uploadToken,
+    size: input.file.size,
+  });
+
+  return { ok: true };
+}
 // История 1: загрузка исходной работы (.docx). Хранится строкой order_files с
 // kind='source' (slide_number = 0). Один источник на upload_token — повторная
 // загрузка заменяет прежний.

@@ -1,4 +1,5 @@
 import { pool } from "@/lib/db";
+import type { DesignSpec } from "@/lib/design";
 
 export type OrderStatus =
   | "pending"
@@ -17,6 +18,7 @@ export interface OrderRow {
   wishes: string | null;
   storyboard: string | null;
   style: string;
+  prefs: DesignSpec | null;
   status: OrderStatus;
   file_path: string | null;
   regen_used: boolean;
@@ -32,15 +34,16 @@ export async function createOrder(data: {
   wishes: string | null;
   storyboard: string | null;
   style: string;
+  prefs?: DesignSpec | null;
   userId?: string | null;
   status?: OrderStatus;
   parentOrderId?: string | null;
 }): Promise<OrderRow> {
   const { rows } = await pool.query<OrderRow>(
     `INSERT INTO orders (
-       email, user_id, tariff, slide_count, topic, wishes, storyboard, style, status, parent_order_id
+       email, user_id, tariff, slide_count, topic, wishes, storyboard, style, prefs, status, parent_order_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
      RETURNING *`,
     [
       data.email,
@@ -51,6 +54,7 @@ export async function createOrder(data: {
       data.wishes,
       data.storyboard,
       data.style,
+      data.prefs ? JSON.stringify(data.prefs) : null,
       data.status ?? "pending",
       data.parentOrderId ?? null,
     ]
@@ -100,6 +104,7 @@ export async function createRegenerationOrder(data: {
   wishes: string | null;
   storyboard: string | null;
   style: string;
+  prefs?: DesignSpec | null;
 }): Promise<OrderRow | null> {
   const client = await pool.connect();
   try {
@@ -122,9 +127,9 @@ export async function createRegenerationOrder(data: {
 
     const created = await client.query<OrderRow>(
       `INSERT INTO orders (
-         email, user_id, tariff, slide_count, topic, wishes, storyboard, style, status, parent_order_id
+         email, user_id, tariff, slide_count, topic, wishes, storyboard, style, prefs, status, parent_order_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'generating', $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'generating', $10)
        RETURNING *`,
       [
         data.email,
@@ -135,6 +140,7 @@ export async function createRegenerationOrder(data: {
         data.wishes,
         data.storyboard,
         data.style,
+        data.prefs ? JSON.stringify(data.prefs) : null,
         data.originalOrderId,
       ]
     );
@@ -201,6 +207,20 @@ export async function getOrderFiles(
     [orderId]
   );
   return rows;
+}
+
+export async function getOrderTitleImage(
+  orderId: string
+): Promise<{ path: string; description: string | null } | null> {
+  const { rows } = await pool.query<{ stored_path: string; description: string | null }>(
+    `SELECT stored_path, description
+     FROM order_files
+     WHERE order_id = $1 AND kind = 'title'
+     LIMIT 1`,
+    [orderId]
+  );
+  const row = rows[0];
+  return row ? { path: row.stored_path, description: row.description } : null;
 }
 
 // История 1: путь к исходной работе (.docx), если она прикреплена к заказу.

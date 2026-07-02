@@ -2,6 +2,7 @@ import path from "path";
 import { promises as fs } from "fs";
 import pptxgen from "pptxgenjs";
 import type { Deck, Slide } from "@/lib/anthropic";
+import type { DesignSpec } from "@/lib/design";
 import type { ResolvedVisual } from "@/lib/visuals";
 
 interface Theme {
@@ -51,19 +52,6 @@ const THEMES: Record<string, Theme> = {
     subText: "777777",
     font: "Arial",
   },
-};
-
-// ── T4a: пользовательские prefs (orders.prefs JSONB, появится в T4c) ──────────
-// Подмножество, влияющее на рендер колоды. auto = prefs null (текущее поведение).
-export type DesignSpec = {
-  preset?: "academic" | "auto" | "custom";
-  workType?: "vkr" | "coursework" | "report" | "generic";
-  title?: { mode?: "auto" | "self" | "upload"; fileId?: string };
-  fonts?: {
-    heading?: { face?: string; size?: number; bold?: boolean; italic?: boolean };
-    body?: { face?: string; size?: number };
-  };
-  palette?: { bg?: string; text?: string; accent?: string };
 };
 
 type ResolvedFont = { face: string; size: number; bold: boolean; italic: boolean };

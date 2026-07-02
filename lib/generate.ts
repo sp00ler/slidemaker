@@ -5,6 +5,7 @@ import {
   OrderRow,
   getOrderFiles,
   getOrderSource,
+  getOrderTitleImage,
   markAwaitingManual,
   markDone,
   markError,
@@ -203,12 +204,14 @@ export async function processOrder(order: OrderRow): Promise<void> {
   const expiresAt = new Date(Date.now() + env.DOWNLOADS_TTL_DAYS * 24 * 60 * 60 * 1000);
   let title = order.topic;
 
+  const design = order.prefs ?? undefined;
   const baseParams = {
     topic: order.topic,
     style: order.style,
     slideCount: order.slide_count,
     wishes: order.wishes,
     storyboard: order.storyboard,
+    design,
   };
 
   async function safeVisuals(deck: Deck): Promise<Map<number, ResolvedVisual> | undefined> {
@@ -227,6 +230,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
 
   try {
     await fs.mkdir(dir, { recursive: true });
+    const titleImage = design?.title?.mode === "upload" ? await getOrderTitleImage(order.id) : null;
     const slideImages = new Map<number, SlideImageEntry>(
       (await getOrderFiles(order.id)).map((file) => [
         file.slide_number,
@@ -265,7 +269,15 @@ export async function processOrder(order: OrderRow): Promise<void> {
       buildSourceSlideMap(deck1, source.extractedPaths),
       slideImages
     );
-    await buildPptx(deck1, order.style, outPath, images1, await safeVisuals(deck1));
+    await buildPptx(
+      deck1,
+      order.style,
+      outPath,
+      images1,
+      await safeVisuals(deck1),
+      design,
+      titleImage ?? undefined
+    );
     await markDone(order.id, fileRel);
   } catch (e) {
     await markError(order.id).catch(() => {});

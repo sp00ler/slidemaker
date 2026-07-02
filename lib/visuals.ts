@@ -83,7 +83,19 @@ async function photoToImage(v: Visual): Promise<ResolvedVisual | null> {
 // Генерация картинки OpenAI Images (gpt-image-1). Включается при OPENAI_API_KEY.
 const IMAGE_GEN_TIMEOUT_MS = 60000; // генерация медленнее обычного fetch
 
-async function generatedImage(v: Visual): Promise<ResolvedVisual | null> {
+// Жёстко приклеенный style-suffix — не полагаемся только на то, что модель
+// сама впишет ограничения стиля в image_prompt (замечание QA: "иишные",
+// тёмные картинки на светлой колоде).
+function buildImagePrompt(v: Visual, accent?: string): string {
+  const style =
+    "Style: light background, flat/minimal editorial illustration, no photorealism, " +
+    "no dark or moody lighting, clean simple shapes" +
+    (accent ? `, color palette built around ${accent}` : "") +
+    ".";
+  return `${v.image_prompt.trim()}. ${style}`;
+}
+
+async function generatedImage(v: Visual, accent?: string): Promise<ResolvedVisual | null> {
   const key = process.env.OPENAI_API_KEY;
   if (!key || !v.image_prompt.trim()) return null;
 
@@ -98,7 +110,7 @@ async function generatedImage(v: Visual): Promise<ResolvedVisual | null> {
       },
       body: JSON.stringify({
         model: "gpt-image-1",
-        prompt: v.image_prompt,
+        prompt: buildImagePrompt(v, accent),
         size: "1536x1024", // landscape под слайд
         quality: process.env.OPENAI_IMAGE_QUALITY || "medium", // low|medium|high — цена/качество
         n: 1,
@@ -120,7 +132,7 @@ async function generatedImage(v: Visual): Promise<ResolvedVisual | null> {
   }
 }
 
-export async function resolveVisual(v: Visual): Promise<ResolvedVisual | null> {
+export async function resolveVisual(v: Visual, accent?: string): Promise<ResolvedVisual | null> {
   switch (v.type) {
     case "diagram":
       return mermaidToImage(v);
@@ -131,7 +143,7 @@ export async function resolveVisual(v: Visual): Promise<ResolvedVisual | null> {
     case "photo":
       return photoToImage(v);
     case "image":
-      return generatedImage(v);
+      return generatedImage(v, accent);
     default:
       return null;
   }
@@ -143,11 +155,12 @@ export async function resolveDeckVisuals(
   deck: Deck
 ): Promise<Map<number, ResolvedVisual>> {
   const out = new Map<number, ResolvedVisual>();
+  const accent = deck.palette?.accent;
   await Promise.all(
     deck.slides.map(async (slide, index) => {
       if (slide.layout !== "content") return;
       try {
-        const resolved = await resolveVisual(slide.visual);
+        const resolved = await resolveVisual(slide.visual, accent);
         if (resolved) out.set(index + 1, resolved);
       } catch (e) {
         console.warn("visual resolve failed:", {

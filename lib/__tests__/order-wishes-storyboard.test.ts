@@ -153,6 +153,8 @@ async function loadCheckoutRoute(): Promise<{
   const envPath = path.join(activeRuntimeDir, "lib", "env.js");
   const uploadsPath = path.join(activeRuntimeDir, "lib", "uploads.js");
   const usersPath = path.join(activeRuntimeDir, "lib", "users.js");
+  const generatePath = path.join(activeRuntimeDir, "lib", "generate.js");
+  const promoPath = path.join(activeRuntimeDir, "lib", "promo.js");
   await fs.mkdir(path.join(activeRuntimeDir, "lib"), { recursive: true });
   await fs.writeFile(
     ordersPath,
@@ -183,11 +185,22 @@ async function loadCheckoutRoute(): Promise<{
     usersPath,
     `exports.upsertUserByEmail = async (email) => ({ id: "user-id", email, role: "user", created_at: "" });`
   );
+  // checkout route (d7b0e57) тянет promo-bypass: generate + promo нужны в runtime-стабах
+  await fs.writeFile(
+    generatePath,
+    `exports.processOrder = async () => {};`
+  );
+  await fs.writeFile(
+    promoPath,
+    `exports.redeemPromo = async () => false;`
+  );
   delete require.cache[ordersPath];
   delete require.cache[yookassaPath];
   delete require.cache[envPath];
   delete require.cache[uploadsPath];
   delete require.cache[usersPath];
+  delete require.cache[generatePath];
+  delete require.cache[promoPath];
   (globalThis as unknown as { __checkoutCalls: typeof calls }).__checkoutCalls = calls;
 
   await transpileSource(

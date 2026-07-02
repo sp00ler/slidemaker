@@ -1,4 +1,5 @@
 import path from "path";
+import { promises as fs } from "fs";
 import pptxgen from "pptxgenjs";
 import type { Deck, Slide } from "@/lib/anthropic";
 import type { ResolvedVisual } from "@/lib/visuals";
@@ -62,12 +63,114 @@ type SlideImage = {
   description: string | null;
 };
 
+type Box = { x: number; y: number; w: number; h: number };
+
 function resolveSlideImagePath(filePath: string): string | null {
   const resolved = path.resolve(process.cwd(), filePath);
   if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) {
     return null;
   }
   return resolved;
+}
+
+// Натуральные размеры PNG (IHDR) и JPEG (SOF-маркеры) из байтов заголовка.
+// Достаточно первых килобайт — читаем только сигнатуру. null = формат неизвестен.
+function parseImageSize(buf: Buffer): { w: number; h: number } | null {
+  // PNG: 8-байтная сигнатура, затем IHDR — width@16, height@20 (big-endian).
+  if (
+    buf.length >= 24 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  ) {
+    const w = buf.readUInt32BE(16);
+    const h = buf.readUInt32BE(20);
+    if (w > 0 && h > 0) return { w, h };
+    return null;
+  }
+  // JPEG: FFD8, дальше сегменты; SOF0..SOF3/5..7/9..11/13..15 несут размеры.
+  if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let off = 2;
+    while (off + 9 < buf.length) {
+      if (buf[off] !== 0xff) {
+        off++;
+        continue;
+      }
+      const marker = buf[off + 1];
+      // маркеры без длины: RSTn (D0..D7), SOI, EOI
+      if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+        off += 2;
+        continue;
+      }
+      const len = buf.readUInt16BE(off + 2);
+      const isSOF =
+        (marker >= 0xc0 && marker <= 0xc3) ||
+        (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) ||
+        (marker >= 0xcd && marker <= 0xcf);
+      if (isSOF) {
+        const h = buf.readUInt16BE(off + 5);
+        const w = buf.readUInt16BE(off + 7);
+        if (w > 0 && h > 0) return { w, h };
+        return null;
+      }
+      off += 2 + len;
+    }
+  }
+  return null;
+}
+
+function sizeFromDataUrl(data: string): { w: number; h: number } | null {
+  const comma = data.indexOf(",");
+  if (comma < 0) return null;
+  try {
+    const buf = Buffer.from(data.slice(comma + 1), "base64");
+    return parseImageSize(buf);
+  } catch {
+    return null;
+  }
+}
+
+async function sizeFromFile(filePath: string): Promise<{ w: number; h: number } | null> {
+  try {
+    const fd = await fs.open(filePath, "r");
+    try {
+      const buf = Buffer.alloc(64 * 1024);
+      const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+      return parseImageSize(buf.subarray(0, bytesRead));
+    } finally {
+      await fd.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+// Вписать натуральный размер в регион с сохранением аспекта, центрировать.
+// natural неизвестен → регион как есть (старое поведение, картинка тянется).
+function fitContain(
+  region: Box,
+  natural: { w: number; h: number } | null
+): Box {
+  if (!natural || natural.w <= 0 || natural.h <= 0) return region;
+  const regionAspect = region.w / region.h;
+  const imgAspect = natural.w / natural.h;
+  let w: number;
+  let h: number;
+  if (imgAspect > regionAspect) {
+    w = region.w;
+    h = region.w / imgAspect;
+  } else {
+    h = region.h;
+    w = region.h * imgAspect;
+  }
+  return {
+    x: region.x + (region.w - w) / 2,
+    y: region.y + (region.h - h) / 2,
+    w,
+    h,
+  };
 }
 
 function renderTitle(slide: pptxgen.Slide, s: Slide, t: Theme) {
@@ -100,31 +203,94 @@ function renderTitle(slide: pptxgen.Slide, s: Slide, t: Theme) {
   }
 }
 
-function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme) {
-  slide.background = { color: t.primary };
-  slide.addText(s.heading, {
+function renderSection(slide: pptxgen.Slide, s: Slide, t: Theme, index: number) {
+  // Светлый фон вместо full-bleed accent. Крупный accent-номер + вертикальный бар.
+  slide.background = { color: t.bg };
+  const num = String(index + 1).padStart(2, "0");
+  // толстый вертикальный accent-бар слева — крупный элемент без заливки всего слайда
+  slide.addShape("rect", { x: 0.9, y: 2.6, w: 0.14, h: 2.3, fill: { color: t.accent } });
+  // крупный полупрозрачный номер секции
+  slide.addText(num, {
     x: 0.9,
-    y: 2.8,
-    w: W - 1.8,
-    h: 1.9,
-    fontSize: 34,
+    y: 1.3,
+    w: 4.0,
+    h: 1.4,
+    fontSize: 96,
     bold: true,
-    color: "FFFFFF",
+    color: t.accent,
+    transparency: 82,
     fontFace: t.font,
-    align: "center",
+    align: "left",
+    valign: "middle",
+  });
+  slide.addText(s.heading, {
+    x: 1.3,
+    y: 2.6,
+    w: W - 2.4,
+    h: 2.3,
+    fontSize: 40,
+    bold: true,
+    color: t.heading,
+    fontFace: t.font,
+    align: "left",
     valign: "middle",
   });
   if (s.subheading) {
     slide.addText(s.subheading, {
-      x: 0.9,
-      y: 4.7,
-      w: W - 1.8,
+      x: 1.3,
+      y: 5.0,
+      w: W - 2.4,
       h: 1.0,
       fontSize: 18,
-      color: "FFFFFFCC",
+      color: t.text,
       fontFace: t.font,
-      align: "center",
+      align: "left",
     });
+  }
+}
+
+// Геометрия content-слайда для варианта лейаута. 3 детерминированных варианта,
+// ротация по индексу слайда — соседние всегда различаются.
+function contentLayout(variant: number): {
+  headingX: number;
+  headingY: number;
+  bulletY: number;
+  decor: (slide: pptxgen.Slide, t: Theme) => void;
+} {
+  switch (variant % 3) {
+    case 1:
+      // вертикальная полоса слева
+      return {
+        headingX: 0.9,
+        headingY: 0.6,
+        bulletY: 1.9,
+        decor: (slide, t) =>
+          slide.addShape("rect", { x: 0, y: 0, w: 0.28, h: H, fill: { color: t.primary } }),
+      };
+    case 2:
+      // акцент-блок под заголовком, без верхней полосы
+      return {
+        headingX: 0.7,
+        headingY: 0.55,
+        bulletY: 2.05,
+        decor: (slide, t) =>
+          slide.addShape("rect", {
+            x: 0.75,
+            y: 1.6,
+            w: 2.4,
+            h: 0.09,
+            fill: { color: t.accent },
+          }),
+      };
+    default:
+      // верхняя акцентная полоса (вариант 0)
+      return {
+        headingX: 0.7,
+        headingY: 0.6,
+        bulletY: 1.9,
+        decor: (slide, t) =>
+          slide.addShape("rect", { x: 0, y: 0, w: W, h: 0.22, fill: { color: t.primary } }),
+      };
   }
 }
 
@@ -132,16 +298,17 @@ function renderContent(
   slide: pptxgen.Slide,
   s: Slide,
   t: Theme,
-  hasImage: boolean
+  hasImage: boolean,
+  variant: number
 ) {
   slide.background = { color: t.bg };
-  // верхняя акцентная полоса
-  slide.addShape("rect", { x: 0, y: 0, w: W, h: 0.22, fill: { color: t.primary } });
+  const layout = contentLayout(variant);
+  layout.decor(slide, t);
 
   slide.addText(s.heading, {
-    x: 0.7,
-    y: 0.6,
-    w: W - 1.4,
+    x: layout.headingX,
+    y: layout.headingY,
+    w: W - layout.headingX - 0.7,
     h: 1.0,
     fontSize: 28,
     bold: true,
@@ -167,7 +334,7 @@ function renderContent(
           paraSpaceAfter: 10,
         },
       })),
-      { x: 0.9, y: 1.9, w: bulletW, h: bulletH, valign: "top", fit: "shrink" }
+      { x: 0.9, y: layout.bulletY, w: bulletW, h: bulletH, valign: "top", fit: "shrink" }
     );
   }
 
@@ -183,7 +350,7 @@ function renderContent(
   });
 }
 
-function visualRegion(hasBullets: boolean) {
+function visualRegion(hasBullets: boolean): Box {
   return {
     x: hasBullets ? 7.2 : 2.0,
     y: 1.85,
@@ -192,12 +359,8 @@ function visualRegion(hasBullets: boolean) {
   };
 }
 
-function addCaption(
-  slide: pptxgen.Slide,
-  t: Theme,
-  text: string,
-  region: { x: number; y: number; w: number; h: number }
-) {
+// Подпись всегда ПОД полным регионом (не под вписанной картинкой) — не наезжает.
+function addCaption(slide: pptxgen.Slide, t: Theme, text: string, region: Box) {
   if (!text) return;
   slide.addText(text, {
     x: region.x,
@@ -221,11 +384,12 @@ function renderAiVisual(
 ) {
   const region = visualRegion(hasBullets);
   if (visual.kind === "image") {
-    slide.addImage({ data: visual.data, ...region, altText: visual.alt });
+    const fitted = fitContain(region, sizeFromDataUrl(visual.data));
+    slide.addImage({ data: visual.data, ...fitted, altText: visual.alt });
     addCaption(slide, t, visual.caption, region);
     return;
   }
-  // chart — нативный график pptxgenjs
+  // chart — нативный график pptxgenjs, заполняет регион целиком
   const { chart } = visual;
   const type =
     chart.kind === "line"
@@ -285,15 +449,22 @@ export async function buildPptx(
         renderTitle(slide, s, theme);
         break;
       case "section":
-        renderSection(slide, s, theme);
+        renderSection(slide, s, theme, index);
         break;
       default: // content | conclusion
-        renderContent(slide, s, theme, Boolean(resolvedPath) || Boolean(aiVisual));
+        renderContent(
+          slide,
+          s,
+          theme,
+          Boolean(resolvedPath) || Boolean(aiVisual),
+          index
+        );
         if (resolvedPath && image) {
           const region = visualRegion(hasBullets);
+          const fitted = fitContain(region, await sizeFromFile(resolvedPath));
           slide.addImage({
             path: resolvedPath,
-            ...region,
+            ...fitted,
             altText: image.description ?? "",
           });
           addCaption(slide, theme, image.description ?? "", region);

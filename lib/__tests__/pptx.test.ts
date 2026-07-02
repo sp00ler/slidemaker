@@ -19,9 +19,24 @@ type PptxModule = {
     },
     style: string,
     outPath: string,
-    slideImages?: Map<number, { path: string; description: string | null }>
+    slideImages?: Map<number, { path: string; description: string | null }>,
+    aiVisuals?: Map<
+      number,
+      { kind: "image"; data: string; alt: string; caption: string }
+    >
   ) => Promise<void>;
 };
+
+// Минимальный валидный PNG-заголовок с заданными размерами (IHDR width/height).
+function pngHeader(width: number, height: number): Buffer {
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdr = Buffer.alloc(25);
+  ihdr.writeUInt32BE(13, 0); // длина IHDR
+  ihdr.write("IHDR", 4, "ascii");
+  ihdr.writeUInt32BE(width, 8);
+  ihdr.writeUInt32BE(height, 12);
+  return Buffer.concat([sig, ihdr]);
+}
 
 const testOutDir = path.join(process.cwd(), ".test-dist");
 const requireFromTest = createRequire(__filename);
@@ -132,4 +147,59 @@ test("buildPptx inserts uploaded image on matching content slide", async () => {
   assert.equal(imageArgs[0].path, uploadPath);
   const captionArgs = slides[1].texts.find((args) => args[0] === "Скрин");
   assert.ok(captionArgs, "caption text missing");
+});
+
+test("buildPptx fit-contains AI image preserving aspect ratio", async () => {
+  const { mod, capture } = await loadPptx();
+  // вертикальная картинка 100x200 → аспект 0.5
+  const data = `data:image/png;base64,${pngHeader(100, 200).toString("base64")}`;
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [
+        { layout: "content", heading: "Body", subheading: "", bullets: ["Point"] },
+      ],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    new Map([[1, { kind: "image", data, alt: "a", caption: "c" }]])
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{ images: unknown[] }>;
+  const imgArgs = slides[0].images[0] as [{ w: number; h: number; x: number; y: number }];
+  const { w, h } = imgArgs[0];
+  // регион с буллетами: 5.2 x 3.45 → узкая картинка вписана по высоте
+  assert.ok(Math.abs(w / h - 0.5) < 0.01, `aspect distorted: ${w}x${h}`);
+  assert.ok(h <= 3.45 + 1e-6 && w <= 5.2 + 1e-6, "image exceeds region");
+});
+
+test("buildPptx rotates content layouts so neighbors differ", async () => {
+  const { mod, capture } = await loadPptx();
+  const content = (heading: string) => ({
+    layout: "content" as const,
+    heading,
+    subheading: "",
+    bullets: ["p"],
+  });
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [content("A"), content("B"), content("C")],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx")
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{ shapes: unknown[][] }>;
+  // decor-фигура каждого варианта уникальна по геометрии — сериализуем и сравниваем
+  const decor = slides.map((s) => JSON.stringify(s.shapes[0]));
+  assert.notEqual(decor[0], decor[1], "slide 0 and 1 share layout");
+  assert.notEqual(decor[1], decor[2], "slide 1 and 2 share layout");
 });

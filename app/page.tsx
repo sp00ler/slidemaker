@@ -665,22 +665,42 @@ export default function Home() {
 
                     <div className="field">
                       <label>Оформление</label>
-                      <div className="styles">
-                        {([
-                          ["academic", "Академический", "для ВКР, курсовых, докладов"],
-                          ["auto", "ИИ решает", "палитра и шрифты по теме"],
-                          ["custom", "Свои настройки", "шрифт, размер, цвета"],
-                        ] as const).map(([id, label, desc]) => (
-                          <button
-                            key={id}
-                            className={`style-opt ${designPreset === id ? "active" : ""}`}
-                            type="button"
-                            onClick={() => setDesignPreset(id)}
-                          >
-                            <div className="style-label">{label}</div>
-                            <div className="style-desc">{desc}</div>
-                          </button>
-                        ))}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                          gap: "16px",
+                          alignItems: "start",
+                        }}
+                        className="design-grid"
+                      >
+                        <div className="styles">
+                          {([
+                            ["academic", "Академический", "для ВКР, курсовых, докладов"],
+                            ["auto", "ИИ решает", "палитра и шрифты по теме"],
+                            ["custom", "Свои настройки", "шрифт, размер, цвета"],
+                          ] as const).map(([id, label, desc]) => (
+                            <button
+                              key={id}
+                              className={`style-opt ${designPreset === id ? "active" : ""}`}
+                              type="button"
+                              onClick={() => setDesignPreset(id)}
+                            >
+                              <div className="style-label">{label}</div>
+                              <div className="style-desc">{desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                        <DesignPreview
+                          preset={designPreset}
+                          headingFace={headingFace}
+                          bodyFace={bodyFace}
+                          headingSize={headingSize}
+                          bodySize={bodySize}
+                          bg={paletteBg}
+                          text={paletteText}
+                          accent={paletteAccent}
+                        />
                       </div>
                     </div>
 
@@ -906,6 +926,156 @@ export default function Home() {
 
 
     </>
+  );
+}
+
+// Живое схематичное превью слайда (16:9), реагирует на пресет/шрифт/размер/палитру.
+// Чистый React-стейт, без запросов — только визуальный ориентир.
+function DesignPreview({
+  preset,
+  headingFace,
+  bodyFace,
+  headingSize,
+  bodySize,
+  bg,
+  text,
+  accent,
+}: {
+  preset: DesignPreset;
+  headingFace: string;
+  bodyFace: string;
+  headingSize: number;
+  bodySize: number;
+  bg: string;
+  text: string;
+  accent: string;
+}) {
+  const disclaimer = (
+    <div style={{ marginTop: "8px", fontSize: "11px", color: "#8a8a8a", textAlign: "center" }}>
+      Превью схематично — реальный слайд оформляется точнее
+    </div>
+  );
+
+  // ИИ решает — конкретного оформления нет, показываем заглушку.
+  if (preset === "auto") {
+    return (
+      <div>
+        <div
+          style={{
+            aspectRatio: "16 / 9",
+            border: "1px solid #e2e2e2",
+            borderRadius: "8px",
+            background: "#f6f6f4",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "14px",
+            textAlign: "center",
+            color: "#7a7a7a",
+            fontSize: "12px",
+            lineHeight: 1.4,
+          }}
+        >
+          ИИ подберёт палитру и шрифты под вашу тему
+        </div>
+        {disclaimer}
+      </div>
+    );
+  }
+
+  const academic = preset === "academic";
+  const slideBg = academic ? "#FFFFFF" : bg;
+  const ink = academic ? "#1A1A1A" : text;
+  const line = academic ? "#1F3A5F" : accent;
+  const headFace = academic ? "Arial" : headingFace;
+  const bodyF = academic ? "Arial" : bodyFace;
+  const headPt = academic ? 32 : headingSize;
+  const bodyPt = academic ? 24 : bodySize;
+  // pt → px в мокапе (слайд ~1280px ужат до ~300px).
+  const headPx = Math.max(11, Math.round(headPt * 0.42));
+  const bodyPx = Math.max(8, Math.round(bodyPt * 0.42));
+
+  const rows = ["Анализ предметной области", "Проектирование архитектуры", "Программная реализация"];
+
+  return (
+    <div>
+      <div
+        style={{
+          aspectRatio: "16 / 9",
+          border: "1px solid #d9d9d9",
+          borderRadius: "8px",
+          background: slideBg,
+          padding: "14px 16px",
+          overflow: "hidden",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Заголовок: academic — ALL-CAPS по центру + подчёркивание */}
+        <div style={{ textAlign: academic ? "center" : "left" }}>
+          <span
+            style={{
+              fontFamily: `"${headFace}", sans-serif`,
+              fontSize: `${headPx}px`,
+              fontWeight: 700,
+              color: ink,
+              letterSpacing: academic ? "0.04em" : "0",
+              textTransform: academic ? "uppercase" : "none",
+              lineHeight: 1.15,
+            }}
+          >
+            {academic ? "Задачи исследования" : "Заголовок слайда"}
+          </span>
+          <div
+            style={{
+              height: "3px",
+              width: academic ? "42%" : "28%",
+              background: line,
+              margin: academic ? "6px auto 0" : "6px 0 0",
+              borderRadius: "2px",
+            }}
+          />
+        </div>
+
+        {/* Строки: academic — нумерация с вертикальным штрихом; custom — маркеры */}
+        <div
+          style={{
+            marginTop: "10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "7px",
+            flex: 1,
+            justifyContent: "center",
+          }}
+        >
+          {rows.map((row, i) => (
+            <div key={row} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {academic ? (
+                <>
+                  <span style={{ width: "3px", alignSelf: "stretch", background: line, borderRadius: "2px" }} />
+                  <span style={{ fontFamily: `"${headFace}", sans-serif`, fontWeight: 700, color: line, fontSize: `${bodyPx}px`, minWidth: "12px" }}>
+                    {i + 1}
+                  </span>
+                </>
+              ) : (
+                <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: line, flexShrink: 0 }} />
+              )}
+              <span style={{ fontFamily: `"${bodyF}", sans-serif`, fontSize: `${bodyPx}px`, color: ink, lineHeight: 1.2 }}>
+                {row}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {academic && (
+        <div style={{ marginTop: "8px", fontSize: "12px", color: line, textAlign: "center", fontWeight: 600 }}>
+          Стиль по умолчанию — академический
+        </div>
+      )}
+      {disclaimer}
+    </div>
   );
 }
 

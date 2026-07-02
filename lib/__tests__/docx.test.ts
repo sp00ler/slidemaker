@@ -16,6 +16,22 @@ const documentXml =
   "<w:p><w:r><w:t>Второй &amp; абзац</w:t></w:r></w:p>" +
   "</w:body></w:document>";
 
+const documentWithTableXml =
+  '<?xml version="1.0"?><w:document><w:body>' +
+  "<w:p><w:r><w:t>Перед таблицей.</w:t></w:r></w:p>" +
+  "<w:tbl>" +
+  "<w:tr>" +
+  "<w:tc><w:p><w:r><w:t>Колонка A</w:t></w:r></w:p></w:tc>" +
+  "<w:tc><w:p><w:r><w:t>Колонка B</w:t></w:r></w:p></w:tc>" +
+  "</w:tr>" +
+  "<w:tr>" +
+  "<w:tc><w:p><w:r><w:t>Один</w:t></w:r></w:p></w:tc>" +
+  "<w:tc><w:p><w:r><w:t>Два &amp; три</w:t></w:r></w:p></w:tc>" +
+  "</w:tr>" +
+  "</w:tbl>" +
+  "<w:p><w:r><w:t>После таблицы.</w:t></w:r></w:p>" +
+  "</w:body></w:document>";
+
 test("extractDocx pulls plain text from document.xml", async () => {
   const buf = await makeDocx({ "word/document.xml": documentXml });
   const { text } = await extractDocx(buf);
@@ -64,4 +80,14 @@ test("isDocx accepts a real docx zip and rejects junk", async () => {
 test("looksLikeZip detects PK signature", () => {
   assert.equal(looksLikeZip(new Uint8Array([0x50, 0x4b, 0x03, 0x04])), true);
   assert.equal(looksLikeZip(new Uint8Array([0x00, 0x01, 0x02, 0x03])), false);
+});
+
+test("extractDocx converts docx tables to markdown and keeps paragraph order", async () => {
+  const buf = await makeDocx({ "word/document.xml": documentWithTableXml });
+  const { text } = await extractDocx(buf);
+
+  assert.match(
+    text,
+    /Перед таблицей\.\n\| Колонка A \| Колонка B \|\n\| --- \| --- \|\n\| Один \| Два & три \|\nПосле таблицы\./
+  );
 });

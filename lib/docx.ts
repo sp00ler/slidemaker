@@ -30,6 +30,9 @@ export type ExtractOptions = {
   maxImageBytes?: number; // картинки крупнее — пропускаем
   minImageBytes?: number; // мельче — это иконки/буллеты/линии, пропускаем
   maxTextChars?: number; // обрезаем текст работы под промпт
+  maxTables?: number; // таблицы сверх лимита пропускаем
+  maxTableRows?: number; // строки сверх лимита таблицы пропускаем
+  maxTableCells?: number; // ячейки сверх лимита таблицы пропускаем
 };
 
 const DEFAULTS: Required<ExtractOptions> = {
@@ -37,6 +40,9 @@ const DEFAULTS: Required<ExtractOptions> = {
   maxImageBytes: 5 * 1024 * 1024,
   minImageBytes: 8 * 1024,
   maxTextChars: 16000,
+  maxTables: 12,
+  maxTableRows: 40,
+  maxTableCells: 240,
 };
 
 // Достаточно проверки сигнатуры zip (PK\x03\x04). Полная валидность — на JSZip.
@@ -70,7 +76,7 @@ export async function extractDocx(
   const zip = await JSZip.loadAsync(buf);
 
   const docXml = (await zip.file("word/document.xml")?.async("string")) ?? "";
-  const text = xmlToText(docXml).slice(0, opts.maxTextChars);
+  const text = xmlToText(docXml, opts).slice(0, opts.maxTextChars);
 
   // word/media/imageN.* — сортируем по имени, чтобы порядок был стабильным и
   // близким к порядку в документе.
@@ -94,11 +100,17 @@ export async function extractDocx(
   return { text, images };
 }
 
-// Грубое, но достаточное превращение WordprocessingML в plain text: абзацы и
-// табы → переводы строк/табы, остальные теги выкидываем, базовые сущности
-// раскодируем.
-function xmlToText(xml: string): string {
+// Грубое, но достаточное превращение WordprocessingML в text: абзацы и табы
+// сохраняем, таблицы переводим в markdown, остальные теги выкидываем.
+function xmlToText(xml: string, opts: Required<ExtractOptions>): string {
+  let tableCount = 0;
   return xml
+    .replace(/<w:tbl\b[\s\S]*?<\/w:tbl>/gi, (tableXml) => {
+      tableCount += 1;
+      if (tableCount > opts.maxTables) return "\n";
+      const markdown = tableToMarkdown(tableXml, opts);
+      return markdown ? `${markdown}\n` : "\n";
+    })
     .replace(/<w:tab\b[^>]*\/?>/gi, "\t")
     .replace(/<\/w:p>/gi, "\n")
     .replace(/<w:br\b[^>]*\/?>/gi, "\n")
@@ -111,4 +123,62 @@ function xmlToText(xml: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function tableToMarkdown(xml: string, opts: Required<ExtractOptions>): string {
+  const rows: string[][] = [];
+  let cellCount = 0;
+
+  for (const rowMatch of xml.matchAll(/<w:tr\b[\s\S]*?<\/w:tr>/gi)) {
+    if (rows.length >= opts.maxTableRows || cellCount >= opts.maxTableCells) {
+      break;
+    }
+
+    const cells: string[] = [];
+    for (const cellMatch of rowMatch[0].matchAll(/<w:tc\b[\s\S]*?<\/w:tc>/gi)) {
+      if (cellCount >= opts.maxTableCells) break;
+      const text = xmlFragmentToCellText(cellMatch[0]);
+      cells.push(escapeMarkdownTableCell(text));
+      cellCount += 1;
+    }
+
+    if (cells.length > 0) rows.push(cells);
+  }
+
+  if (rows.length === 0) return "";
+
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  const normalizedRows = rows.map((row) =>
+    Array.from({ length: columnCount }, (_, i) => row[i] ?? "")
+  );
+  const separator = Array.from({ length: columnCount }, () => "---");
+
+  return [normalizedRows[0], separator, ...normalizedRows.slice(1)]
+    .map((row) => `| ${row.join(" | ")} |`)
+    .join("\n");
+}
+
+function xmlFragmentToCellText(xml: string): string {
+  return decodeXmlEntities(
+    xml
+      .replace(/<w:tab\b[^>]*\/?>/gi, " ")
+      .replace(/<w:br\b[^>]*\/?>/gi, " ")
+      .replace(/<\/w:p>/gi, " ")
+      .replace(/<[^>]+>/g, "")
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeMarkdownTableCell(text: string): string {
+  return text.replace(/\|/g, "\\|");
+}
+
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }

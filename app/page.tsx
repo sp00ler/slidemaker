@@ -702,6 +702,44 @@ export default function Home() {
                           accent={paletteAccent}
                         />
                       </div>
+                      {designPreset === "custom" && (
+                        <div className="disclosure-body" style={{ marginTop: "12px" }}>
+                          <div className="field">
+                            <label>Шрифты</label>
+                            <div className="slider-row">
+                              <select value={headingFace} onChange={(e) => setHeadingFace(e.target.value)}>
+                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
+                              </select>
+                              <select value={bodyFace} onChange={(e) => setBodyFace(e.target.value)}>
+                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="field">
+                            <label>Размеры: заголовок {headingSize} pt · текст {bodySize} pt</label>
+                            <div className="slider-row">
+                              <input type="number" min={16} max={40} value={headingSize} onChange={(e) => setHeadingSize(Number(e.target.value))} />
+                              <input type="number" min={16} max={40} value={bodySize} onChange={(e) => setBodySize(Number(e.target.value))} />
+                            </div>
+                          </div>
+                          <div className="field">
+                            <label>Палитра</label>
+                            <div className="slider-row">
+                              <input type="text" value={paletteBg} onChange={(e) => setPaletteBg(e.target.value)} placeholder="#FFFFFF" />
+                              <input type="text" value={paletteText} onChange={(e) => setPaletteText(e.target.value)} placeholder="#1A1A1A" />
+                              <input type="text" value={paletteAccent} onChange={(e) => setPaletteAccent(e.target.value)} placeholder="#1F3A5F" />
+                            </div>
+                            <div className="styles" style={{ marginTop: "10px" }}>
+                              {OFFICE_THEME_IDS.map((id) => (
+                                <button key={id} className="style-opt" type="button" onClick={() => applyOfficeTheme(id)}>
+                                  <div className="style-label">{DESIGN_PRESETS[id].label}</div>
+                                  <div className="style-desc">#{DESIGN_PRESETS[id].palette.accent}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="field">
@@ -738,48 +776,6 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-
-                    {designPreset === "custom" && (
-                      <details className="details-field">
-                        <summary>Свои настройки оформления <span>▼</span></summary>
-                        <div className="disclosure-body">
-                          <div className="field">
-                            <label>Шрифты</label>
-                            <div className="slider-row">
-                              <select value={headingFace} onChange={(e) => setHeadingFace(e.target.value)}>
-                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
-                              </select>
-                              <select value={bodyFace} onChange={(e) => setBodyFace(e.target.value)}>
-                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                          <div className="field">
-                            <label>Размеры: заголовок {headingSize} pt · текст {bodySize} pt</label>
-                            <div className="slider-row">
-                              <input type="number" min={16} max={40} value={headingSize} onChange={(e) => setHeadingSize(Number(e.target.value))} />
-                              <input type="number" min={16} max={40} value={bodySize} onChange={(e) => setBodySize(Number(e.target.value))} />
-                            </div>
-                          </div>
-                          <div className="field">
-                            <label>Палитра</label>
-                            <div className="slider-row">
-                              <input type="text" value={paletteBg} onChange={(e) => setPaletteBg(e.target.value)} placeholder="#FFFFFF" />
-                              <input type="text" value={paletteText} onChange={(e) => setPaletteText(e.target.value)} placeholder="#1A1A1A" />
-                              <input type="text" value={paletteAccent} onChange={(e) => setPaletteAccent(e.target.value)} placeholder="#1F3A5F" />
-                            </div>
-                            <div className="styles" style={{ marginTop: "10px" }}>
-                              {OFFICE_THEME_IDS.map((id) => (
-                                <button key={id} className="style-opt" type="button" onClick={() => applyOfficeTheme(id)}>
-                                  <div className="style-label">{DESIGN_PRESETS[id].label}</div>
-                                  <div className="style-desc">#{DESIGN_PRESETS[id].palette.accent}</div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </details>
-                    )}
 
                     {uploadToken && (
                       <details className="details-field">

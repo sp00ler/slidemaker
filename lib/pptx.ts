@@ -325,51 +325,6 @@ function renderSection(slide: pptxgen.Slide, s: Slide, t: Style, index: number) 
   }
 }
 
-// Один декор на ВСЮ колоду (по стилю), без ротации: рандомные полосы то сверху,
-// то слева читаются как хаос, а не как дизайн (фидбек владельца 03.07).
-function contentDecor(styleKey: string): {
-  headingX: number;
-  headingY: number;
-  bulletY: number;
-  decor: (slide: pptxgen.Slide, t: Style) => void;
-} {
-  switch (styleKey) {
-    case "creative":
-      // тонкая вертикальная полоса слева
-      return {
-        headingX: 0.9,
-        headingY: 0.6,
-        bulletY: 1.9,
-        decor: (slide, t) =>
-          slide.addShape("rect", { x: 0, y: 0, w: 0.18, h: H, fill: { color: t.primary } }),
-      };
-    case "minimal":
-      // только короткое accent-подчёркивание под заголовком
-      return {
-        headingX: 0.7,
-        headingY: 0.55,
-        bulletY: 2.0,
-        decor: (slide, t) =>
-          slide.addShape("rect", {
-            x: 0.75,
-            y: 1.55,
-            w: 2.2,
-            h: 0.06,
-            fill: { color: t.accent },
-          }),
-      };
-    default:
-      // business: тонкая верхняя полоса
-      return {
-        headingX: 0.7,
-        headingY: 0.6,
-        bulletY: 1.9,
-        decor: (slide, t) =>
-          slide.addShape("rect", { x: 0, y: 0, w: W, h: 0.14, fill: { color: t.primary } }),
-      };
-  }
-}
-
 // Детерминированный подбор кегля буллетов под высоту региона. pptxgenjs
 // fit:"shrink" пишет normAutofit, который PowerPoint пересчитывает только при
 // редактировании textbox — на просмотре текст просто вылезает за слайд.
@@ -396,18 +351,17 @@ export function fitBodyFontSize(
 type ContentOpts = {
   hasImage: boolean;
   bottomVisual: boolean; // широкий визуал уходит вниз на всю ширину
-  styleKey: string;
 };
 
+// Никаких полос (решение владельца 03.07): единственный графический элемент —
+// короткое accent-подчёркивание, отделяющее заголовок от тела слайда.
 function renderContent(slide: pptxgen.Slide, s: Slide, t: Style, opts: ContentOpts) {
   slide.background = { color: t.bg };
-  const layout = contentDecor(opts.styleKey);
-  layout.decor(slide, t);
 
   slide.addText(s.heading, {
-    x: layout.headingX,
-    y: layout.headingY,
-    w: W - layout.headingX - 0.7,
+    x: 0.7,
+    y: 0.55,
+    w: W - 1.4,
     h: 1.0,
     fontSize: t.headingFont.size,
     bold: t.headingFont.bold,
@@ -417,11 +371,18 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Style, opts: ContentOp
     align: "left",
     fit: "shrink",
   });
+  slide.addShape("rect", {
+    x: 0.75,
+    y: 1.55,
+    w: 2.2,
+    h: 0.05,
+    fill: { color: t.accent },
+  });
 
   const bullets = s.bullets.filter((b) => b.trim().length > 0);
   if (bullets.length > 0) {
     const bulletW = opts.bottomVisual ? W - 1.8 : opts.hasImage ? 5.8 : W - 1.8;
-    const bulletH = opts.bottomVisual ? 2.5 : opts.hasImage ? 4.9 : H - 2.6;
+    const bulletH = opts.bottomVisual ? 2.4 : opts.hasImage ? 4.8 : H - 2.7;
     const fontSize = fitBodyFontSize(bullets, bulletW - 0.3, bulletH, t.bodyFont.size);
     slide.addText(
       bullets.map((b) => ({
@@ -435,7 +396,7 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Style, opts: ContentOp
           paraSpaceAfter: 10,
         },
       })),
-      { x: 0.9, y: layout.bulletY, w: bulletW, h: bulletH, valign: "top", fit: "shrink" }
+      { x: 0.9, y: 2.0, w: bulletW, h: bulletH, valign: "top", fit: "shrink" }
     );
   }
 
@@ -813,7 +774,7 @@ export async function buildPptx(
         break;
       default: // content | conclusion
         if (spec.academic) renderAcademicContent(slide, s, spec, hasImage, index);
-        else renderContent(slide, s, spec, { hasImage, bottomVisual, styleKey: style });
+        else renderContent(slide, s, spec, { hasImage, bottomVisual });
         if (resolvedPath && image) {
           const region = visualRegion(hasBullets, bottomVisual);
           const fitted = fitContain(region, natural);

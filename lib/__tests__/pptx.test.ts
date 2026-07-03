@@ -350,3 +350,49 @@ test("buildPptx places wide visual bottom full-width and shrinks bullets font", 
     `bullets font not shrunk: ${runs[0].options.fontSize}`
   );
 });
+
+test("academic content with wide visual keeps text above the bottom band", async () => {
+  const { mod, capture } = await loadPptx();
+  // широкая LR-диаграмма 1200x300 → нижний регион, текст обязан кончиться выше 4.65
+  const data = `data:image/png;base64,${pngHeader(1200, 300).toString("base64")}`;
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [
+        {
+          layout: "content",
+          heading: "Этапы исследования",
+          subheading: "",
+          bullets: ["Этап 1: анализ", "Этап 2: классификация", "Этап 3: характеристика", "Этап 4: выводы"],
+        },
+      ],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    new Map([[1, { kind: "image", data, alt: "a", caption: "c" }]]),
+    { preset: "academic" }
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{
+    images: unknown[][];
+    texts: unknown[][];
+  }>;
+  const imgOpts = (slides[0].images[0] as [{ y: number; w: number }])[0];
+  assert.ok(imgOpts.y >= 4.6, `wide visual not at bottom: y=${imgOpts.y}`);
+
+  // все текстовые блоки буллетов (кроме watermark и caption) выше нижнего региона
+  for (const args of slides[0].texts) {
+    const [content, opts] = args as [unknown, { y?: number; h?: number; fontSize?: number }];
+    if (typeof content === "string" && content === "slidemaker.ru") continue;
+    if (typeof content === "string" && content === "c") continue; // caption
+    if (typeof opts?.y !== "number" || typeof opts?.h !== "number") continue;
+    assert.ok(
+      opts.y + opts.h <= 4.65 + 1e-6,
+      `text block overlaps bottom visual: y=${opts.y} h=${opts.h} (${String(content).slice(0, 30)})`
+    );
+  }
+});

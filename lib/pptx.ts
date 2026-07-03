@@ -494,21 +494,27 @@ function renderAcademicContent(
   s: Slide,
   t: Style,
   hasImage: boolean,
-  variant: number
+  variant: number,
+  bottomVisual: boolean
 ) {
   slide.background = { color: t.bg };
   academicHeading(slide, s, t);
 
   const bullets = s.bullets.filter((b) => b.trim().length > 0);
-  const region: Box = {
-    x: 0.7,
-    y: 1.75,
-    w: hasImage ? 5.9 : W - 1.4,
-    h: H - 1.75 - 0.45,
-  };
+  // bottomVisual: широкая диаграмма занимает низ (y≥4.65) на всю ширину —
+  // текстовый регион обязан закончиться выше, иначе визуал ложится на текст.
+  const region: Box = bottomVisual
+    ? { x: 0.7, y: 1.75, w: W - 1.4, h: 2.7 }
+    : {
+        x: 0.7,
+        y: 1.75,
+        w: hasImage ? 5.9 : W - 1.4,
+        h: H - 1.75 - 0.45,
+      };
 
-  // hasImage не оставляет места двум колонкам → нумерованные блоки в левой части.
-  const mode = hasImage ? 0 : variant % 3;
+  // hasImage не оставляет места двум колонкам → нумерованные блоки; при
+  // bottomVisual регион низкий — тоже numbered, колонки/рамка не влезают.
+  const mode = hasImage || bottomVisual ? 0 : variant % 3;
   if (bullets.length > 0) {
     if (mode === 1) {
       academicTwoColumns(slide, t, bullets, region);
@@ -773,7 +779,7 @@ export async function buildPptx(
         else renderSection(slide, s, spec, index);
         break;
       default: // content | conclusion
-        if (spec.academic) renderAcademicContent(slide, s, spec, hasImage, index);
+        if (spec.academic) renderAcademicContent(slide, s, spec, hasImage, index, bottomVisual);
         else renderContent(slide, s, spec, { hasImage, bottomVisual });
         if (resolvedPath && image) {
           const region = visualRegion(hasBullets, bottomVisual);

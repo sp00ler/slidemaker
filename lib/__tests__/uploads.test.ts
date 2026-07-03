@@ -29,6 +29,17 @@ type UploadsModule = {
 
 type OrdersModule = {
   bindUploadFilesToOrder: (orderId: string, uploadToken: string) => Promise<void>;
+  createRegenerationOrder: (data: {
+    originalOrderId: string;
+    userId: string;
+    email: string;
+    tariff: string;
+    slideCount: number;
+    topic: string;
+    wishes: string | null;
+    storyboard: string | null;
+    style: string;
+  }) => Promise<unknown | null>;
 };
 
 const testOutDir = path.join(process.cwd(), ".test-dist");
@@ -85,12 +96,16 @@ async function writeDbStub(count: number): Promise<unknown[][]> {
   const dbPath = path.join(activeRuntimeDir, "lib", "db.js");
   await fs.writeFile(
     dbPath,
-    `exports.pool = { query: async (...args) => {
+    `const query = async (...args) => {
       global.__uploadQueryCalls.push(args);
       const sql = String(args[0]);
       if (sql.includes('COUNT')) return { rows: [{ count: String(global.__uploadCount) }] };
       return { rows: [] };
-    } };`
+    };
+    exports.pool = {
+      query,
+      connect: async () => ({ query, release: () => {} }),
+    };`
   );
   (globalThis as unknown as { __uploadQueryCalls: unknown[][] }).__uploadQueryCalls = calls;
   (globalThis as unknown as { __uploadCount: number }).__uploadCount = count;
@@ -209,4 +224,28 @@ test("saveTitleUpload stores PNG and issues valid parameterized SQL", async () =
   } finally {
     await fs.rm(path.join(process.cwd(), "uploads", token), { recursive: true, force: true });
   }
+});
+
+test("createRegenerationOrder claims only root paid orders (no regen chains)", async () => {
+  const { mod, calls } = await loadOrders();
+
+  // db-стаб возвращает rows:[] на claim → заказ не корневой/уже использован
+  const result = await mod.createRegenerationOrder({
+    originalOrderId: "44444444-4444-4444-8444-444444444444",
+    userId: "55555555-5555-4555-8555-555555555555",
+    email: "u@example.com",
+    tariff: "standard",
+    slideCount: 10,
+    topic: "Topic",
+    wishes: null,
+    storyboard: null,
+    style: "business",
+  });
+
+  assert.equal(result, null, "claim must fail when no row matched");
+  const claim = calls.find(([sql]) => String(sql).includes("SET regen_used = true"));
+  assert.ok(claim, "claim query missing");
+  // дочерний реген-заказ (parent_order_id != null) не должен давать новую
+  // бесплатную генерацию — иначе цепочка реген→реген бесконечна
+  assert.match(String((claim as unknown[])[0]), /parent_order_id IS NULL/);
 });

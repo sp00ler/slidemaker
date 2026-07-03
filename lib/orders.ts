@@ -109,6 +109,9 @@ export async function createRegenerationOrder(data: {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // parent_order_id IS NULL — реген только с ОПЛАЧЕННОГО корневого заказа.
+    // Дочерний реген-заказ тоже done + regen_used=false, без этой проверки
+    // цепочка реген→реген→… даёт бесконечные бесплатные генерации через API.
     const claim = await client.query<OrderRow>(
       `UPDATE orders
        SET regen_used = true
@@ -116,6 +119,7 @@ export async function createRegenerationOrder(data: {
          AND user_id = $2
          AND status = 'done'
          AND regen_used = false
+         AND parent_order_id IS NULL
        RETURNING *`,
       [data.originalOrderId, data.userId]
     );

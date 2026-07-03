@@ -82,7 +82,10 @@ const RawDesignPrefsSchema = z.object({
 export function parseDesignPrefs(
   value: unknown
 ): { value: DesignSpec | null; error?: string } {
-  const parsed = RawDesignPrefsSchema.safeParse(value ?? { preset: "academic" });
+  // undefined (ключ отсутствует в body) — дефолт academic; null (клиент явно
+  // выбрал "ИИ решает") — это preset auto, а не то же самое, что "не пришло".
+  const input = value === undefined ? { preset: "academic" } : value === null ? { preset: "auto" } : value;
+  const parsed = RawDesignPrefsSchema.safeParse(input);
   if (!parsed.success) {
     return {
       value: null,
@@ -91,7 +94,13 @@ export function parseDesignPrefs(
   }
 
   const raw = parsed.data;
-  if (raw.preset === "auto") return { value: null };
+  // "auto" = ИИ решает только ОФОРМЛЕНИЕ (палитру/шрифты). workType (каркас
+  // ВКР/курсовой) и title.mode (свой титул) — контентные настройки, живут и в auto.
+  if (raw.preset === "auto") {
+    return {
+      value: { preset: "auto", workType: raw.workType, title: raw.title },
+    };
+  }
 
   const academicPalette = ACADEMIC_PALETTE;
   const prefs: DesignSpec = {

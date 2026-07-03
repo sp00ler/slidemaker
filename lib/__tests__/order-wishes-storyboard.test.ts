@@ -341,7 +341,14 @@ test("checkout design prefs validator rejects invalid font size and hex", async 
     parseDesignPrefs({ preset: "custom", palette: { accent: "red" } }).error ?? "",
     /#RRGGBB/
   );
-  assert.deepEqual(parseDesignPrefs({ preset: "auto" }), { value: null });
+  // auto решает только оформление: workType и title сохраняются в spec
+  assert.deepEqual(parseDesignPrefs({ preset: "auto" }), {
+    value: { preset: "auto", workType: "generic", title: { mode: "auto" } },
+  });
+  assert.deepEqual(
+    parseDesignPrefs({ preset: "auto", workType: "vkr", title: { mode: "self" } }),
+    { value: { preset: "auto", workType: "vkr", title: { mode: "self" } } }
+  );
 });
 test("createOrder inserts wishes and storyboard", async () => {
   const { mod, calls } = await loadOrders();

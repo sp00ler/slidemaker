@@ -97,7 +97,10 @@ export default async function AccountPage() {
                         Скачать .pptx
                       </a>
                     ) : order.file_path ? (
-                      <span className="account-expired">срок ссылки истёк</span>
+                      <div>
+                        <span className="account-expired">срок ссылки истёк</span>
+                        <div className="field-hint">Истекает только ссылка на скачивание — сам заказ сохраняется</div>
+                      </div>
                     ) : null}
                   </div>
 
@@ -107,6 +110,7 @@ export default async function AccountPage() {
                       initialTopic={order.topic}
                       initialStyle={order.style}
                       initialSlideCount={order.slide_count}
+                      initialPrefs={order.prefs}
                       maxSlides={
                         TARIFFS[order.tariff as Tariff["id"]]?.maxSlides ??
                         TARIFFS.basic.maxSlides

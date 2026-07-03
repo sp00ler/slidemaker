@@ -229,6 +229,94 @@ test("regenerate allows standard tariff max slide count", async () => {
   );
 });
 
+test("regenerate without prefs in body inherits original order's prefs", async () => {
+  const inheritedPrefs = { preset: "academic", workType: "generic", title: { mode: "auto" } };
+  const { mod, calls } = await loadRegenerateRoute({
+    "order-id": { id: "order-id", user_id: "user-1", tariff: "standard", prefs: inheritedPrefs },
+  });
+
+  const res = await mod.POST(request({ slideCount: 10 }));
+
+  assert.equal(res.status, 200);
+  assert.equal(calls.createRegenerationOrder.length, 1);
+  assert.deepEqual(
+    (calls.createRegenerationOrder[0] as { prefs: unknown }).prefs,
+    inheritedPrefs
+  );
+});
+
+test("regenerate with custom prefs in body overrides original order's prefs", async () => {
+  const { mod, calls } = await loadRegenerateRoute({
+    "order-id": {
+      id: "order-id",
+      user_id: "user-1",
+      tariff: "standard",
+      prefs: { preset: "academic", workType: "generic" },
+    },
+  });
+
+  const res = await mod.POST(
+    request({
+      slideCount: 10,
+      prefs: {
+        preset: "custom",
+        workType: "report",
+        title: { mode: "auto" },
+        fonts: { heading: { face: "Arial", size: 32 }, body: { face: "Arial", size: 24 } },
+        palette: { bg: "#ABCDEF", text: "#111111", accent: "#222222" },
+      },
+    })
+  );
+
+  assert.equal(res.status, 200);
+  assert.equal(calls.createRegenerationOrder.length, 1);
+  const sentPrefs = (
+    calls.createRegenerationOrder[0] as {
+      prefs: { preset: string; workType: string; palette: { bg: string } };
+    }
+  ).prefs;
+  assert.equal(sentPrefs.preset, "custom");
+  assert.equal(sentPrefs.workType, "report");
+  assert.equal(sentPrefs.palette.bg, "ABCDEF");
+});
+
+test("regenerate with prefs:null in body switches to auto, overriding inherited prefs", async () => {
+  const { mod, calls } = await loadRegenerateRoute({
+    "order-id": {
+      id: "order-id",
+      user_id: "user-1",
+      tariff: "standard",
+      prefs: { preset: "academic", workType: "generic" },
+    },
+  });
+
+  const res = await mod.POST(request({ slideCount: 10, prefs: null }));
+
+  assert.equal(res.status, 200);
+  assert.equal(calls.createRegenerationOrder.length, 1);
+  // auto-spec вместо null: оформление за ИИ, workType/title сохранены
+  assert.deepEqual((calls.createRegenerationOrder[0] as { prefs: unknown }).prefs, {
+    preset: "auto",
+    workType: "generic",
+    title: { mode: "auto" },
+  });
+});
+
+test("regenerate rejects invalid prefs in body", async () => {
+  const { mod, calls } = await loadRegenerateRoute({
+    "order-id": { id: "order-id", user_id: "user-1", tariff: "standard" },
+  });
+
+  const res = await mod.POST(
+    request({ slideCount: 10, prefs: { preset: "custom", palette: { bg: "not-a-hex" } } })
+  );
+  const data = (await res.json()) as { error: string };
+
+  assert.equal(res.status, 400);
+  assert.match(data.error, /#RRGGBB/);
+  assert.equal(calls.createRegenerationOrder.length, 0);
+});
+
 test("regenerate returns 404 for missing or foreign orders", async () => {
   const { mod, calls } = await loadRegenerateRoute({
     "foreign-order": { id: "foreign-order", user_id: "user-2", tariff: "basic" },

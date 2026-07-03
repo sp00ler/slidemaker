@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { parseOptionalText } from "@/lib/checkout-validation";
+import { parseDesignPrefs, parseOptionalText } from "@/lib/checkout-validation";
 import { processOrder } from "@/lib/generate";
 import { bindUploadFilesToOrder, createRegenerationOrder, getOrder } from "@/lib/orders";
 import { isUuid } from "@/lib/uploads";
@@ -79,6 +79,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Некорректный uploadToken" }, { status: 400 });
     }
 
+    // prefs в body — юзер поменял оформление в форме регена; без него наследуем от исходного заказа.
+    let prefs = original.prefs;
+    if (Object.prototype.hasOwnProperty.call(body, "prefs")) {
+      const prefsResult = parseDesignPrefs(body.prefs);
+      if (prefsResult.error) {
+        return NextResponse.json({ error: prefsResult.error }, { status: 400 });
+      }
+      prefs = prefsResult.value;
+    }
+
     const order = await createRegenerationOrder({
       originalOrderId: orderId,
       userId: user.id,
@@ -89,7 +99,7 @@ export async function POST(req: Request) {
       wishes: wishesResult.value,
       storyboard: storyboardResult.value,
       style,
-      prefs: original.prefs,
+      prefs,
     });
 
     if (!order) {

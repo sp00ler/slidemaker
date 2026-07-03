@@ -1,7 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MIN_SLIDES, STYLES, StyleId } from "@/lib/tariffs";
+import {
+  defaultDesignValue,
+  designSpecToValue,
+  designValueToSpec,
+  type DesignControlsValue,
+  type DesignSpec,
+} from "@/lib/design";
+import { DesignControls } from "../DesignControls";
 import { SourceUploader } from "../SourceUploader";
 
 const STORYBOARD_MAX = 1000;
@@ -25,14 +34,17 @@ export function RegenerateForm({
   initialTopic,
   initialStyle,
   initialSlideCount,
+  initialPrefs,
   maxSlides,
 }: {
   orderId: string;
   initialTopic: string;
   initialStyle: string;
   initialSlideCount: number;
+  initialPrefs: DesignSpec | null;
   maxSlides: number;
 }) {
+  const router = useRouter();
   const [topic, setTopic] = useState(initialTopic);
   const [style, setStyle] = useState<StyleId>(
     STYLES[initialStyle as StyleId] ? (initialStyle as StyleId) : "business"
@@ -40,16 +52,24 @@ export function RegenerateForm({
   const [slideCount, setSlideCount] = useState(
     Math.min(Math.max(initialSlideCount || MIN_SLIDES, MIN_SLIDES), maxSlides)
   );
+  const [designValue, setDesignValue] = useState<DesignControlsValue>(
+    () => (initialPrefs ? designSpecToValue(initialPrefs) : defaultDesignValue())
+  );
   const [wishes, setWishes] = useState("");
   const [storyboard, setStoryboard] = useState("");
   const [uploadToken, setUploadToken] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   // uploadToken только на клиенте — иначе SSR/hydration mismatch.
   useEffect(() => {
     setUploadToken(globalThis.crypto.randomUUID());
   }, []);
+
+  function patchDesign(patch: Partial<DesignControlsValue>) {
+    setDesignValue((v) => ({ ...v, ...patch }));
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,6 +86,7 @@ export function RegenerateForm({
         wishes,
         storyboard,
         uploadToken,
+        prefs: designValueToSpec(designValue),
       }),
     });
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -74,8 +95,13 @@ export function RegenerateForm({
       setLoading(false);
       return;
     }
-    setStatus("Новая генерация запущена. Файл придёт на почту.");
     setLoading(false);
+    setDone(true);
+    router.refresh();
+  }
+
+  if (done) {
+    return <div className="account-badge">Запущено — файл придёт на почту</div>;
   }
 
   return (
@@ -121,6 +147,7 @@ export function RegenerateForm({
           </select>
         </div>
       </div>
+      <DesignControls value={designValue} onChange={patchDesign} uploadToken={uploadToken} />
       {uploadToken && (
         <details className="details-field">
           <summary>+ Загрузить исходную работу .docx (необязательно)<span>▼</span></summary>

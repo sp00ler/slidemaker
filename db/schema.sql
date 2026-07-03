@@ -65,3 +65,12 @@ CREATE TABLE IF NOT EXISTS order_files (
 CREATE INDEX IF NOT EXISTS order_files_token_idx ON order_files (upload_token);
 CREATE INDEX IF NOT EXISTS order_files_order_idx ON order_files (order_id);
 CREATE INDEX IF NOT EXISTS order_files_kind_idx ON order_files (order_id, kind);
+
+CREATE TABLE IF NOT EXISTS promo_codes (
+  code             text PRIMARY KEY,
+  used             boolean NOT NULL DEFAULT false,
+  used_at          timestamptz,
+  order_id         uuid REFERENCES orders(id),
+  discount_percent int NOT NULL DEFAULT 100 CHECK (discount_percent BETWEEN 1 AND 100),
+  created_at       timestamptz NOT NULL DEFAULT now()
+);

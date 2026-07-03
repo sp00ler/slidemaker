@@ -98,37 +98,49 @@ export async function POST(req: Request) {
       await bindUploadFilesToOrder(order.id, uploadToken);
     }
 
-    // Тестовый промокод: одноразовый. Атомарно гасим код — если успешно,
-    // обходим оплату и повторяем ветку успешного вебхука (claim + генерация
-    // в фоне). Невалидный/использованный код — ошибка, оплату НЕ создаём.
+    let amountRub = tariff.price;
+    let discountPercent = 0;
+
+    // Промокод одноразовый. 100% — старый bypass оплаты; частичная скидка —
+    // платёж ЮKassa на уменьшенную сумму.
     if (promo) {
-      const ok = await redeemPromo(promo, order.id);
-      if (!ok) {
+      const promoResult = await redeemPromo(promo, order.id);
+      if (!promoResult.redeemed) {
         return NextResponse.json(
           { error: "Промокод недействителен или уже использован" },
           { status: 400 }
         );
       }
-      const claimed = await claimForGeneration(order.id);
-      if (claimed) {
-        processOrder(claimed).catch((err) =>
-          console.error("promo generation failed:", err)
-        );
+
+      discountPercent = promoResult.discountPercent;
+      if (discountPercent === 100) {
+        const claimed = await claimForGeneration(order.id);
+        if (claimed) {
+          processOrder(claimed).catch((err) =>
+            console.error("promo generation failed:", err)
+          );
+        }
+        return NextResponse.json({
+          confirmationUrl: `${env.APP_URL}/success?order=${order.id}`,
+          discountPercent,
+          amountRub: 0,
+        });
       }
-      return NextResponse.json({
-        confirmationUrl: `${env.APP_URL}/success?order=${order.id}`,
-      });
+
+      amountRub = Math.max(1, Math.round(tariff.price * (100 - discountPercent) / 100));
     }
 
     const { confirmationUrl } = await createPayment({
       orderId: order.id,
-      amountRub: tariff.price,
-      description: `Презентация: ${topic.slice(0, 100)}`,
+      amountRub,
+      description: promo
+        ? `Презентация: ${topic.slice(0, 80)} (промокод −${discountPercent}%)`
+        : `Презентация: ${topic.slice(0, 100)}`,
       returnUrl: `${env.APP_URL}/success?order=${order.id}`,
       email,
     });
 
-    return NextResponse.json({ confirmationUrl });
+    return NextResponse.json({ confirmationUrl, discountPercent, amountRub });
   } catch (e) {
     console.error("checkout error:", e);
     return NextResponse.json({ error: "Ошибка сервера" }, { status: 500 });

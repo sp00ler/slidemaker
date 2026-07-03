@@ -1,14 +1,27 @@
 import { pool } from "@/lib/db";
 
+export type PromoRedeemResult = {
+  redeemed: boolean;
+  discountPercent: number;
+};
+
 // Атомарный «погас» промокода: только один вызов выиграет гонку
 // (UPDATE ... WHERE used=false RETURNING). Защита от повторных кликов/запросов.
-// Возвращает true, если код существовал и был свободен (теперь сгорел).
-export async function redeemPromo(code: string, orderId: string): Promise<boolean> {
-  const { rowCount } = await pool.query(
+export async function redeemPromo(
+  code: string,
+  orderId: string
+): Promise<PromoRedeemResult> {
+  const { rows } = await pool.query<{ discount_percent: number }>(
     `UPDATE promo_codes
      SET used = true, used_at = now(), order_id = $2
-     WHERE code = $1 AND used = false`,
+     WHERE code = $1 AND used = false
+     RETURNING discount_percent`,
     [code, orderId]
   );
-  return (rowCount ?? 0) > 0;
+
+  const discountPercent = rows[0]?.discount_percent;
+  return {
+    redeemed: typeof discountPercent === "number",
+    discountPercent: discountPercent ?? 0,
+  };
 }

@@ -141,14 +141,18 @@ async function loadCheckout(): Promise<CheckoutModule> {
   return requireFromTest(path.join(activeRuntimeDir, "lib", "checkout-validation.js"));
 }
 
-async function loadCheckoutRoute(): Promise<{
+async function loadCheckoutRoute(
+  promoResult = { redeemed: false, discountPercent: 0 }
+): Promise<{
   mod: CheckoutRouteModule;
-  calls: { createOrder: unknown[]; createPayment: unknown[]; bindUploads: unknown[] };
+  calls: { createOrder: unknown[]; createPayment: unknown[]; bindUploads: unknown[]; processOrder: unknown[]; promoResult: { redeemed: boolean; discountPercent: number } };
 }> {
   const calls = {
     createOrder: [] as unknown[],
     createPayment: [] as unknown[],
     bindUploads: [] as unknown[],
+    processOrder: [] as unknown[],
+    promoResult,
   };
   activeRuntimeDir = path.join(testOutDir, `runtime-checkout-${Date.now()}-${Math.random()}`);
   const ordersPath = path.join(activeRuntimeDir, "lib", "orders.js");
@@ -167,7 +171,8 @@ async function loadCheckoutRoute(): Promise<{
     };
     exports.bindUploadFilesToOrder = async (...args) => {
       global.__checkoutCalls.bindUploads.push(args);
-    };`
+    };
+    exports.claimForGeneration = async (id) => ({ id });`
   );
   await fs.writeFile(
     yookassaPath,
@@ -191,11 +196,13 @@ async function loadCheckoutRoute(): Promise<{
   // checkout route (d7b0e57) тянет promo-bypass: generate + promo нужны в runtime-стабах
   await fs.writeFile(
     generatePath,
-    `exports.processOrder = async () => {};`
+    `exports.processOrder = async (order) => {
+      global.__checkoutCalls.processOrder.push(order);
+    };`
   );
   await fs.writeFile(
     promoPath,
-    `exports.redeemPromo = async () => false;`
+    `exports.redeemPromo = async () => global.__checkoutCalls.promoResult;`
   );
   delete require.cache[ordersPath];
   delete require.cache[yookassaPath];
@@ -432,6 +439,77 @@ test("checkout binds uploaded files after order creation", async () => {
   ]);
 });
 
+
+test("checkout discounted promo reduces payment amount", async () => {
+  const { mod, calls } = await loadCheckoutRoute({ redeemed: true, discountPercent: 30 });
+
+  const res = await mod.POST(
+    new Request("https://slidemaker.test/api/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "user@example.com",
+        tariff: "standard",
+        style: "minimal",
+        topic: "Topic",
+        slideCount: 5,
+        promo: "SALE-TEST",
+      }),
+    })
+  );
+  const body = (await res.json()) as { discountPercent: number; amountRub: number };
+
+  assert.equal(res.status, 200);
+  assert.equal(body.discountPercent, 30);
+  assert.equal(body.amountRub, 349);
+  assert.equal((calls.createPayment[0] as { amountRub: number }).amountRub, 349);
+  assert.match((calls.createPayment[0] as { description: string }).description, /−30%/);
+  assert.equal(calls.processOrder.length, 0);
+});
+
+test("checkout 100 percent promo bypasses payment", async () => {
+  const { mod, calls } = await loadCheckoutRoute({ redeemed: true, discountPercent: 100 });
+
+  const res = await mod.POST(
+    new Request("https://slidemaker.test/api/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "user@example.com",
+        tariff: "basic",
+        style: "minimal",
+        topic: "Topic",
+        slideCount: 5,
+        promo: "FREE-TEST",
+      }),
+    })
+  );
+  const body = (await res.json()) as { discountPercent: number; amountRub: number };
+
+  assert.equal(res.status, 200);
+  assert.equal(body.discountPercent, 100);
+  assert.equal(body.amountRub, 0);
+  assert.equal(calls.createPayment.length, 0);
+});
+
+test("checkout rejects burned promo without payment", async () => {
+  const { mod, calls } = await loadCheckoutRoute({ redeemed: false, discountPercent: 0 });
+
+  const res = await mod.POST(
+    new Request("https://slidemaker.test/api/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "user@example.com",
+        tariff: "basic",
+        style: "minimal",
+        topic: "Topic",
+        slideCount: 5,
+        promo: "USED-TEST",
+      }),
+    })
+  );
+
+  assert.equal(res.status, 400);
+  assert.equal(calls.createPayment.length, 0);
+});
 test("processOrder author skips generation and sends manual emails", async () => {
   const { mod, calls } = await loadGenerateManual();
 

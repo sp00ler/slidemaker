@@ -20,6 +20,12 @@ const MAX_UPLOAD_SLIDES = 15;
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME = ["image/png", "image/jpeg", "image/webp"] as const;
 const OFFICE_THEME_IDS = ["officeBlue", "officeGreen", "officeGray", "officeBurgundy", "officePurple"] as const;
+const BG_SWATCHES = [
+  { label: "Белый", hex: "FFFFFF" },
+  { label: "Слоновая кость", hex: "FFFFF0" },
+  { label: "Светло-серый", hex: "F2F2F2" },
+  { label: "Тёплая бумага", hex: "F8F4E9" },
+] as const;
 
 type UploadStatus =
   | "empty"
@@ -152,6 +158,7 @@ export default function Home() {
   const [paletteBg, setPaletteBg] = useState("#FFFFFF");
   const [paletteText, setPaletteText] = useState("#1A1A1A");
   const [paletteAccent, setPaletteAccent] = useState("#1F3A5F");
+  const [activeOffice, setActiveOffice] = useState<(typeof OFFICE_THEME_IDS)[number] | null>(null);
   const [titleUploadName, setTitleUploadName] = useState("");
   const [titleUploadError, setTitleUploadError] = useState("");
   const [titleUploading, setTitleUploading] = useState(false);
@@ -705,38 +712,115 @@ export default function Home() {
                       {designPreset === "custom" && (
                         <div className="disclosure-body" style={{ marginTop: "12px" }}>
                           <div className="field">
-                            <label>Шрифты</label>
-                            <div className="slider-row">
-                              <select value={headingFace} onChange={(e) => setHeadingFace(e.target.value)}>
-                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
-                              </select>
-                              <select value={bodyFace} onChange={(e) => setBodyFace(e.target.value)}>
-                                {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
-                              </select>
-                            </div>
+                            <label>Шрифт заголовков</label>
+                            <select value={headingFace} onChange={(e) => setHeadingFace(e.target.value)}>
+                              {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
+                            </select>
+                            <div className="field-hint">Названия слайдов — крупный, читаемый шрифт</div>
                           </div>
                           <div className="field">
-                            <label>Размеры: заголовок {headingSize} pt · текст {bodySize} pt</label>
-                            <div className="slider-row">
-                              <input type="number" min={16} max={40} value={headingSize} onChange={(e) => setHeadingSize(Number(e.target.value))} />
-                              <input type="number" min={16} max={40} value={bodySize} onChange={(e) => setBodySize(Number(e.target.value))} />
-                            </div>
+                            <label>Шрифт текста</label>
+                            <select value={bodyFace} onChange={(e) => setBodyFace(e.target.value)}>
+                              {FONT_WHITELIST.map((font) => <option key={font} value={font}>{font}</option>)}
+                            </select>
+                            <div className="field-hint">Буллеты и подписи на слайде</div>
                           </div>
                           <div className="field">
-                            <label>Палитра</label>
-                            <div className="slider-row">
-                              <input type="text" value={paletteBg} onChange={(e) => setPaletteBg(e.target.value)} placeholder="#FFFFFF" />
-                              <input type="text" value={paletteText} onChange={(e) => setPaletteText(e.target.value)} placeholder="#1A1A1A" />
-                              <input type="text" value={paletteAccent} onChange={(e) => setPaletteAccent(e.target.value)} placeholder="#1F3A5F" />
+                            <label>Размер заголовков (pt): {headingSize}</label>
+                            <input type="number" min={16} max={40} value={headingSize} onChange={(e) => setHeadingSize(Number(e.target.value))} />
+                            <div className="field-hint">Крупно — должно читаться с задних рядов</div>
+                          </div>
+                          <div className="field">
+                            <label>Размер текста (pt): {bodySize}</label>
+                            <input type="number" min={16} max={40} value={bodySize} onChange={(e) => setBodySize(Number(e.target.value))} />
+                            <div className="field-hint">Для аудитории обычно ≥24pt</div>
+                          </div>
+                          <div className="field">
+                            <label>Фон слайда (подложка)</label>
+                            <div className="color-field">
+                              <input
+                                type="color"
+                                value={paletteBg}
+                                onChange={(e) => { setPaletteBg(e.target.value); setActiveOffice(null); }}
+                              />
+                              <input
+                                type="text"
+                                value={paletteBg}
+                                onChange={(e) => { setPaletteBg(e.target.value); setActiveOffice(null); }}
+                                placeholder="#FFFFFF"
+                              />
                             </div>
-                            <div className="styles" style={{ marginTop: "10px" }}>
-                              {OFFICE_THEME_IDS.map((id) => (
-                                <button key={id} className="style-opt" type="button" onClick={() => applyOfficeTheme(id)}>
-                                  <div className="style-label">{DESIGN_PRESETS[id].label}</div>
-                                  <div className="style-desc">#{DESIGN_PRESETS[id].palette.accent}</div>
-                                </button>
+                            <div className="bg-swatches">
+                              {BG_SWATCHES.map((s) => (
+                                <button
+                                  key={s.hex}
+                                  type="button"
+                                  className={`bg-swatch ${paletteBg.replace("#", "").toUpperCase() === s.hex ? "active" : ""}`}
+                                  style={{ background: `#${s.hex}` }}
+                                  title={s.label}
+                                  onClick={() => { setPaletteBg(`#${s.hex}`); setActiveOffice(null); }}
+                                />
                               ))}
                             </div>
+                            <div className="field-hint">Клик по свотчу подставляет фон — {BG_SWATCHES.map((s) => s.label).join(", ")}</div>
+                          </div>
+                          <div className="field">
+                            <label>Цвет текста</label>
+                            <div className="color-field">
+                              <input
+                                type="color"
+                                value={paletteText}
+                                onChange={(e) => { setPaletteText(e.target.value); setActiveOffice(null); }}
+                              />
+                              <input
+                                type="text"
+                                value={paletteText}
+                                onChange={(e) => { setPaletteText(e.target.value); setActiveOffice(null); }}
+                                placeholder="#1A1A1A"
+                              />
+                            </div>
+                            <div className="field-hint">Основной текст слайдов — должен контрастировать с фоном</div>
+                          </div>
+                          <div className="field">
+                            <label>Акцентный цвет — линии, номера</label>
+                            <div className="color-field">
+                              <input
+                                type="color"
+                                value={paletteAccent}
+                                onChange={(e) => { setPaletteAccent(e.target.value); setActiveOffice(null); }}
+                              />
+                              <input
+                                type="text"
+                                value={paletteAccent}
+                                onChange={(e) => { setPaletteAccent(e.target.value); setActiveOffice(null); }}
+                                placeholder="#1F3A5F"
+                              />
+                            </div>
+                            <div className="field-hint">Только подчёркивания, нумерация, штрихи — не заливка фона</div>
+                          </div>
+                          <div className="field">
+                            <label>Готовые темы</label>
+                            <div className="office-tiles">
+                              {OFFICE_THEME_IDS.map((id) => {
+                                const theme = DESIGN_PRESETS[id].palette;
+                                return (
+                                  <button
+                                    key={id}
+                                    type="button"
+                                    className={`office-tile ${activeOffice === id ? "active" : ""}`}
+                                    onClick={() => { applyOfficeTheme(id); setActiveOffice(id); }}
+                                  >
+                                    <div className="office-dots">
+                                      <span className="color-dot" style={{ background: `#${theme.bg}` }} />
+                                      <span className="color-dot" style={{ background: `#${theme.text}` }} />
+                                      <span className="color-dot" style={{ background: `#${theme.accent}` }} />
+                                    </div>
+                                    <div className="style-label">{DESIGN_PRESETS[id].label}</div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="field-hint">Нажмите — цвета подставятся выше</div>
                           </div>
                         </div>
                       )}

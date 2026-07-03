@@ -325,60 +325,83 @@ function renderSection(slide: pptxgen.Slide, s: Slide, t: Style, index: number) 
   }
 }
 
-// Геометрия content-слайда для варианта лейаута. 3 детерминированных варианта,
-// ротация по индексу слайда — соседние всегда различаются.
-function contentLayout(variant: number): {
+// Один декор на ВСЮ колоду (по стилю), без ротации: рандомные полосы то сверху,
+// то слева читаются как хаос, а не как дизайн (фидбек владельца 03.07).
+function contentDecor(styleKey: string): {
   headingX: number;
   headingY: number;
   bulletY: number;
   decor: (slide: pptxgen.Slide, t: Style) => void;
 } {
-  switch (variant % 3) {
-    case 1:
-      // вертикальная полоса слева
+  switch (styleKey) {
+    case "creative":
+      // тонкая вертикальная полоса слева
       return {
         headingX: 0.9,
         headingY: 0.6,
         bulletY: 1.9,
         decor: (slide, t) =>
-          slide.addShape("rect", { x: 0, y: 0, w: 0.28, h: H, fill: { color: t.primary } }),
+          slide.addShape("rect", { x: 0, y: 0, w: 0.18, h: H, fill: { color: t.primary } }),
       };
-    case 2:
-      // акцент-блок под заголовком, без верхней полосы
+    case "minimal":
+      // только короткое accent-подчёркивание под заголовком
       return {
         headingX: 0.7,
         headingY: 0.55,
-        bulletY: 2.05,
+        bulletY: 2.0,
         decor: (slide, t) =>
           slide.addShape("rect", {
             x: 0.75,
-            y: 1.6,
-            w: 2.4,
-            h: 0.09,
+            y: 1.55,
+            w: 2.2,
+            h: 0.06,
             fill: { color: t.accent },
           }),
       };
     default:
-      // верхняя акцентная полоса (вариант 0)
+      // business: тонкая верхняя полоса
       return {
         headingX: 0.7,
         headingY: 0.6,
         bulletY: 1.9,
         decor: (slide, t) =>
-          slide.addShape("rect", { x: 0, y: 0, w: W, h: 0.22, fill: { color: t.primary } }),
+          slide.addShape("rect", { x: 0, y: 0, w: W, h: 0.14, fill: { color: t.primary } }),
       };
   }
 }
 
-function renderContent(
-  slide: pptxgen.Slide,
-  s: Slide,
-  t: Style,
-  hasImage: boolean,
-  variant: number
-) {
+// Детерминированный подбор кегля буллетов под высоту региона. pptxgenjs
+// fit:"shrink" пишет normAutofit, который PowerPoint пересчитывает только при
+// редактировании textbox — на просмотре текст просто вылезает за слайд.
+// Считаем сами: ширина символа ≈ 0.52*pt, высота строки ≈ 1.3*pt.
+export function fitBodyFontSize(
+  bullets: string[],
+  widthIn: number,
+  heightIn: number,
+  baseSize: number
+): number {
+  const PARA_GAP_IN = 10 / 72; // paraSpaceAfter 10pt
+  for (let size = baseSize; size >= 12; size -= 1) {
+    const charsPerLine = Math.max(8, Math.floor(widthIn / ((0.52 * size) / 72)));
+    const lineH = (1.3 * size) / 72;
+    let total = 0;
+    for (const b of bullets) {
+      total += Math.max(1, Math.ceil(b.length / charsPerLine)) * lineH + PARA_GAP_IN;
+    }
+    if (total <= heightIn) return size;
+  }
+  return 12;
+}
+
+type ContentOpts = {
+  hasImage: boolean;
+  bottomVisual: boolean; // широкий визуал уходит вниз на всю ширину
+  styleKey: string;
+};
+
+function renderContent(slide: pptxgen.Slide, s: Slide, t: Style, opts: ContentOpts) {
   slide.background = { color: t.bg };
-  const layout = contentLayout(variant);
+  const layout = contentDecor(opts.styleKey);
   layout.decor(slide, t);
 
   slide.addText(s.heading, {
@@ -397,14 +420,15 @@ function renderContent(
 
   const bullets = s.bullets.filter((b) => b.trim().length > 0);
   if (bullets.length > 0) {
-    const bulletW = hasImage ? 5.8 : W - 1.8;
-    const bulletH = hasImage ? 4.9 : H - 2.6;
+    const bulletW = opts.bottomVisual ? W - 1.8 : opts.hasImage ? 5.8 : W - 1.8;
+    const bulletH = opts.bottomVisual ? 2.5 : opts.hasImage ? 4.9 : H - 2.6;
+    const fontSize = fitBodyFontSize(bullets, bulletW - 0.3, bulletH, t.bodyFont.size);
     slide.addText(
       bullets.map((b) => ({
         text: b,
         options: {
           bullet: { code: "2022", indent: 18 },
-          fontSize: t.bodyFont.size,
+          fontSize,
           color: t.text,
           fontFace: t.bodyFont.face,
           breakLine: true,
@@ -577,7 +601,7 @@ function academicNumbered(slide: pptxgen.Slide, t: Style, bullets: string[], reg
       y,
       w: region.w - 0.9,
       h: blockH,
-      fontSize: t.bodyFont.size,
+      fontSize: fitBodyFontSize([b], region.w - 1.2, blockH, t.bodyFont.size),
       color: t.text,
       fontFace: t.bodyFont.face,
       align: "left",
@@ -606,7 +630,7 @@ function academicTwoColumns(slide: pptxgen.Slide, t: Style, bullets: string[], r
         y: y + 0.1,
         w: colW - 0.36,
         h: boxH - 0.2,
-        fontSize: t.bodyFont.size,
+        fontSize: fitBodyFontSize([b], colW - 0.5, boxH - 0.2, t.bodyFont.size),
         color: t.text,
         fontFace: t.bodyFont.face,
         align: "left",
@@ -620,12 +644,13 @@ function academicTwoColumns(slide: pptxgen.Slide, t: Style, bullets: string[], r
 // Вариант 2: единый тонкий бокс-рамка вокруг маркированного списка.
 function academicFramed(slide: pptxgen.Slide, t: Style, bullets: string[], region: Box) {
   academicBox(slide, region, t.text);
+  const fontSize = fitBodyFontSize(bullets, region.w - 1.0, region.h - 0.6, t.bodyFont.size);
   slide.addText(
     bullets.map((b) => ({
       text: b,
       options: {
         bullet: { code: "2022", indent: 18 },
-        fontSize: t.bodyFont.size,
+        fontSize,
         color: t.text,
         fontFace: t.bodyFont.face,
         breakLine: true,
@@ -643,7 +668,12 @@ function academicFramed(slide: pptxgen.Slide, t: Style, bullets: string[], regio
   );
 }
 
-function visualRegion(hasBullets: boolean): Box {
+// Широкий визуал (LR-диаграммы) в боковом регионе съёживается в марку —
+// уводим его вниз на всю ширину слайда.
+const WIDE_ASPECT = 2.0;
+
+function visualRegion(hasBullets: boolean, bottom: boolean): Box {
+  if (bottom) return { x: 0.7, y: 4.65, w: W - 1.4, h: 2.25 };
   return {
     x: hasBullets ? 7.2 : 2.0,
     y: 1.85,
@@ -652,18 +682,21 @@ function visualRegion(hasBullets: boolean): Box {
   };
 }
 
-// Подпись всегда ПОД полным регионом (не под вписанной картинкой) — не наезжает.
-function addCaption(slide: pptxgen.Slide, t: Style, text: string, region: Box) {
+// Подпись вплотную ПОД вписанной картинкой (не у дна пустого региона — иначе
+// висит в вакууме). Нейтральный серый: subText темы бывает нечитаем на светлом.
+function addCaption(slide: pptxgen.Slide, t: Style, text: string, region: Box, fitted?: Box) {
   if (!text) return;
+  const anchor = fitted ?? region;
+  const y = Math.min(anchor.y + anchor.h + 0.06, H - 0.5);
   slide.addText(text, {
     x: region.x,
-    y: region.y + region.h + 0.12,
+    y,
     w: region.w,
-    h: 0.45,
-    fontSize: 12,
-    color: t.subText,
+    h: 0.4,
+    fontSize: 11,
+    color: "8A8A8A",
     fontFace: t.bodyFont.face,
-    italic: true,
+    align: "center",
     fit: "shrink",
   });
 }
@@ -673,13 +706,14 @@ function renderAiVisual(
   slide: pptxgen.Slide,
   t: Style,
   visual: ResolvedVisual,
-  hasBullets: boolean
+  hasBullets: boolean,
+  bottom: boolean
 ) {
-  const region = visualRegion(hasBullets);
+  const region = visualRegion(hasBullets, bottom);
   if (visual.kind === "image") {
     const fitted = fitContain(region, sizeFromDataUrl(visual.data));
     slide.addImage({ data: visual.data, ...fitted, altText: visual.alt });
-    addCaption(slide, t, visual.caption, region);
+    addCaption(slide, t, visual.caption, region, fitted);
     return;
   }
   // chart — нативный график pptxgenjs, заполняет регион целиком
@@ -760,6 +794,14 @@ export async function buildPptx(
     const hasBullets = bullets.length > 0;
     const hasImage = Boolean(resolvedPath) || Boolean(aiVisual);
 
+    // Широкий растровый визуал (LR-диаграмма) при наличии буллетов — вниз на
+    // всю ширину, иначе в боковом регионе он превращается в марку.
+    let natural: { w: number; h: number } | null = null;
+    if (resolvedPath) natural = await sizeFromFile(resolvedPath);
+    else if (aiVisual?.kind === "image") natural = sizeFromDataUrl(aiVisual.data);
+    const bottomVisual =
+      hasBullets && natural !== null && natural.w / natural.h > WIDE_ASPECT;
+
     switch (s.layout) {
       case "title":
         if (spec.academic) renderAcademicTitle(slide, s, spec);
@@ -771,18 +813,18 @@ export async function buildPptx(
         break;
       default: // content | conclusion
         if (spec.academic) renderAcademicContent(slide, s, spec, hasImage, index);
-        else renderContent(slide, s, spec, hasImage, index);
+        else renderContent(slide, s, spec, { hasImage, bottomVisual, styleKey: style });
         if (resolvedPath && image) {
-          const region = visualRegion(hasBullets);
-          const fitted = fitContain(region, await sizeFromFile(resolvedPath));
+          const region = visualRegion(hasBullets, bottomVisual);
+          const fitted = fitContain(region, natural);
           slide.addImage({
             path: resolvedPath,
             ...fitted,
             altText: image.description ?? "",
           });
-          addCaption(slide, spec, image.description ?? "", region);
+          addCaption(slide, spec, image.description ?? "", region, fitted);
         } else if (aiVisual) {
-          renderAiVisual(pptx, slide, spec, aiVisual, hasBullets);
+          renderAiVisual(pptx, slide, spec, aiVisual, hasBullets, bottomVisual);
         }
         break;
     }

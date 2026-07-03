@@ -187,7 +187,7 @@ test("buildPptx fit-contains AI image preserving aspect ratio", async () => {
   assert.ok(h <= 3.45 + 1e-6 && w <= 5.2 + 1e-6, "image exceeds region");
 });
 
-test("buildPptx rotates content layouts so neighbors differ", async () => {
+test("buildPptx keeps one consistent decor across the whole deck", async () => {
   const { mod, capture } = await loadPptx();
   const content = (heading: string) => ({
     layout: "content" as const,
@@ -208,10 +208,10 @@ test("buildPptx rotates content layouts so neighbors differ", async () => {
   await fs.rm(runtimeDir, { recursive: true, force: true });
 
   const slides = capture.slides as Array<{ shapes: unknown[][] }>;
-  // decor-фигура каждого варианта уникальна по геометрии — сериализуем и сравниваем
+  // один декор на всю колоду — рандомные полосы читались как хаос
   const decor = slides.map((s) => JSON.stringify(s.shapes[0]));
-  assert.notEqual(decor[0], decor[1], "slide 0 and 1 share layout");
-  assert.notEqual(decor[1], decor[2], "slide 1 and 2 share layout");
+  assert.equal(decor[0], decor[1], "slide 0 and 1 decor must match");
+  assert.equal(decor[1], decor[2], "slide 1 and 2 decor must match");
 });
 
 // Собрать все fontFace из addText-вызовов слайда.
@@ -306,4 +306,47 @@ test("buildPptx title mode self omits generated title slide", async () => {
 
   // 3 слайда в колоде, но title пропущен → 2 отрендерено.
   assert.equal(capture.slides.length, 2, "title slide was not omitted");
+});
+
+test("buildPptx places wide visual bottom full-width and shrinks bullets font", async () => {
+  const { mod, capture } = await loadPptx();
+  // широкая диаграмма 1200x300 (аспект 4) → нижний регион на всю ширину
+  const data = `data:image/png;base64,${pngHeader(1200, 300).toString("base64")}`;
+  const longBullets = [
+    "Очень длинный пункт с большим количеством слов который занимает несколько строк текста подряд",
+    "Второй длинный пункт с большим количеством слов который тоже занимает несколько строк",
+    "Третий пункт с заметным объёмом текста для проверки уменьшения кегля",
+    "Четвёртый пункт с заметным объёмом текста для проверки уменьшения кегля",
+    "Пятый пункт с заметным объёмом текста для проверки уменьшения кегля",
+  ];
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [
+        { layout: "content", heading: "Body", subheading: "", bullets: longBullets },
+      ],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    new Map([[1, { kind: "image", data, alt: "a", caption: "c" }]])
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{ images: unknown[][]; texts: unknown[][] }>;
+  const imgOpts = (slides[0].images[0] as [{ x: number; y: number; w: number; h: number }])[0];
+  // нижний регион: y >= 4.65, ширина почти вся
+  assert.ok(imgOpts.y >= 4.6, `wide visual not at bottom: y=${imgOpts.y}`);
+  assert.ok(imgOpts.w > 8, `wide visual not full-width: w=${imgOpts.w}`);
+
+  // буллеты ужаты: кегль меньше базовых 18pt
+  const bulletCall = slides[0].texts.find((args) => Array.isArray(args[0]));
+  assert.ok(bulletCall, "bullet text call missing");
+  const runs = bulletCall![0] as Array<{ options: { fontSize: number } }>;
+  assert.ok(
+    runs[0].options.fontSize < 18,
+    `bullets font not shrunk: ${runs[0].options.fontSize}`
+  );
 });

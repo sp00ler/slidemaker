@@ -337,8 +337,8 @@ test("buildPptx places wide visual bottom full-width and shrinks bullets font", 
 
   const slides = capture.slides as Array<{ images: unknown[][]; texts: unknown[][] }>;
   const imgOpts = (slides[0].images[0] as [{ x: number; y: number; w: number; h: number }])[0];
-  // нижний регион: y >= 4.65, ширина почти вся
-  assert.ok(imgOpts.y >= 4.6, `wide visual not at bottom: y=${imgOpts.y}`);
+  // нижний регион: y >= 4.0 (полоса поднята и увеличена), ширина почти вся
+  assert.ok(imgOpts.y >= 4.0, `wide visual not at bottom: y=${imgOpts.y}`);
   assert.ok(imgOpts.w > 8, `wide visual not full-width: w=${imgOpts.w}`);
 
   // буллеты ужаты: кегль меньше базовых 18pt
@@ -353,8 +353,13 @@ test("buildPptx places wide visual bottom full-width and shrinks bullets font", 
 
 test("academic content with wide visual keeps text above the bottom band", async () => {
   const { mod, capture } = await loadPptx();
-  // широкая LR-диаграмма 1200x300 → нижний регион, текст обязан кончиться выше 4.65
-  const data = `data:image/png;base64,${pngHeader(1200, 300).toString("base64")}`;
+  // Academic дропает AI-image (кириллица) — широкий визуал только из ЗАГРУЖЕННОГО
+  // изображения. Пишем PNG 1200x300 (аспект 4) под uploads/, отдаём через slideImages.
+  const uploadDir = path.join(process.cwd(), "uploads", `t44-${Date.now()}`);
+  await fs.mkdir(uploadDir, { recursive: true });
+  const uploadPath = path.join(uploadDir, "wide.png");
+  await fs.writeFile(uploadPath, pngHeader(1200, 300));
+  const relPath = path.relative(process.cwd(), uploadPath);
 
   await mod.buildPptx(
     {
@@ -371,28 +376,64 @@ test("academic content with wide visual keeps text above the bottom band", async
     },
     "business",
     path.join(runtimeDir, "out.pptx"),
+    new Map([[1, { path: relPath, description: "c" }]]),
     undefined,
-    new Map([[1, { kind: "image", data, alt: "a", caption: "c" }]]),
     { preset: "academic" }
   );
   await fs.rm(runtimeDir, { recursive: true, force: true });
+  await fs.rm(uploadDir, { recursive: true, force: true });
 
   const slides = capture.slides as Array<{
     images: unknown[][];
     texts: unknown[][];
   }>;
   const imgOpts = (slides[0].images[0] as [{ y: number; w: number }])[0];
-  assert.ok(imgOpts.y >= 4.6, `wide visual not at bottom: y=${imgOpts.y}`);
+  assert.ok(imgOpts.y >= 4.0, `wide visual not at bottom: y=${imgOpts.y}`);
 
-  // все текстовые блоки буллетов (кроме watermark и caption) выше нижнего региона
+  // все текстовые блоки буллетов (кроме watermark и caption) выше нижнего региона (y=4.05)
   for (const args of slides[0].texts) {
     const [content, opts] = args as [unknown, { y?: number; h?: number; fontSize?: number }];
     if (typeof content === "string" && content === "slidemaker.ru") continue;
     if (typeof content === "string" && content === "c") continue; // caption
     if (typeof opts?.y !== "number" || typeof opts?.h !== "number") continue;
     assert.ok(
-      opts.y + opts.h <= 4.65 + 1e-6,
+      opts.y + opts.h <= 4.05 + 1e-6,
       `text block overlaps bottom visual: y=${opts.y} h=${opts.h} (${String(content).slice(0, 30)})`
     );
   }
+});
+
+test("academic numbered bullets all share one font size", async () => {
+  const { mod, capture } = await loadPptx();
+  // Тезисы резко разной длины — раньше каждый вписывался отдельно и получал свой
+  // кегль (жалоба Юленьки «каждый тезис разного размера»). Теперь — единый.
+  const bullets = [
+    "Кратко",
+    "Средний по длине тезис из нескольких слов подряд",
+    "Очень длинный тезис занимающий заметный объём и несколько строк текста для проверки",
+  ];
+
+  await mod.buildPptx(
+    {
+      title: "Deck",
+      subtitle: "",
+      slides: [{ layout: "content", heading: "Итоги", subheading: "", bullets }],
+    },
+    "business",
+    path.join(runtimeDir, "out.pptx"),
+    undefined,
+    undefined,
+    { preset: "academic" }
+  );
+  await fs.rm(runtimeDir, { recursive: true, force: true });
+
+  const slides = capture.slides as Array<{ texts: unknown[][] }>;
+  const sizes = slides[0].texts
+    .filter((args) => bullets.includes(args[0] as string))
+    .map((args) => (args[1] as { fontSize: number }).fontSize);
+  assert.equal(sizes.length, bullets.length, "not all bullets rendered");
+  assert.ok(
+    sizes.every((s) => s === sizes[0]),
+    `bullet font sizes not uniform: ${sizes.join(",")}`
+  );
 });

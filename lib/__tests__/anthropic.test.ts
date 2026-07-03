@@ -310,7 +310,8 @@ test("buildDeckPrompt academic preset caps bullets and locks given palette", asy
 
   assert.match(prompt, /максимум 3 на слайд/);
   assert.match(prompt, /≤8 слов/);
-  assert.match(prompt, /никаких англицизмов/);
+  assert.match(prompt, /ВЕСЬ текст строго на языке темы/);
+  assert.match(prompt, /type "image".*ЗАПРЕЩ/s);
   assert.match(prompt, /bg "FFFFFF", ink "1A1A1A", accent "1F3A5F"/);
 });
 

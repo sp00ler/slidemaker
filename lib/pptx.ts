@@ -348,6 +348,24 @@ export function fitBodyFontSize(
   return 12;
 }
 
+// Заголовок так же нельзя доверять fit:"shrink" — длинный заголовок в 2 строки
+// вылезает из своего бокса и наезжает на accent-подчёркивание. Считаем кегль сам.
+// Заголовки жирные/ALL-CAPS/charSpacing → символ шире тела: charW ≈ 0.62*pt.
+export function fitHeadingFontSize(
+  text: string,
+  widthIn: number,
+  heightIn: number,
+  baseSize: number,
+  minSize = 18
+): number {
+  for (let size = baseSize; size >= minSize; size -= 1) {
+    const charsPerLine = Math.max(6, Math.floor(widthIn / ((0.62 * size) / 72)));
+    const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+    if (lines * ((1.15 * size) / 72) <= heightIn) return size;
+  }
+  return minSize;
+}
+
 type ContentOpts = {
   hasImage: boolean;
   bottomVisual: boolean; // широкий визуал уходит вниз на всю ширину
@@ -363,13 +381,13 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Style, opts: ContentOp
     y: 0.55,
     w: W - 1.4,
     h: 1.0,
-    fontSize: t.headingFont.size,
+    fontSize: fitHeadingFontSize(s.heading, W - 1.4, 1.0, t.headingFont.size),
     bold: t.headingFont.bold,
     italic: t.headingFont.italic,
     color: t.heading,
     fontFace: t.headingFont.face,
     align: "left",
-    fit: "shrink",
+    valign: "top",
   });
   slide.addShape("rect", {
     x: 0.75,
@@ -382,7 +400,7 @@ function renderContent(slide: pptxgen.Slide, s: Slide, t: Style, opts: ContentOp
   const bullets = s.bullets.filter((b) => b.trim().length > 0);
   if (bullets.length > 0) {
     const bulletW = opts.bottomVisual ? W - 1.8 : opts.hasImage ? 5.8 : W - 1.8;
-    const bulletH = opts.bottomVisual ? 2.4 : opts.hasImage ? 4.8 : H - 2.7;
+    const bulletH = opts.bottomVisual ? 1.85 : opts.hasImage ? 4.8 : H - 2.7;
     const fontSize = fitBodyFontSize(bullets, bulletW - 0.3, bulletH, t.bodyFont.size);
     slide.addText(
       bullets.map((b) => ({
@@ -420,7 +438,7 @@ function academicHeading(slide: pptxgen.Slide, s: Slide, t: Style) {
     y: 0.45,
     w: W - 1.4,
     h: 0.8,
-    fontSize: t.headingFont.size,
+    fontSize: fitHeadingFontSize(s.heading, W - 1.4, 0.8, t.headingFont.size),
     bold: true,
     color: t.heading,
     fontFace: t.headingFont.face,
@@ -504,7 +522,7 @@ function renderAcademicContent(
   // bottomVisual: широкая диаграмма занимает низ (y≥4.65) на всю ширину —
   // текстовый регион обязан закончиться выше, иначе визуал ложится на текст.
   const region: Box = bottomVisual
-    ? { x: 0.7, y: 1.75, w: W - 1.4, h: 2.7 }
+    ? { x: 0.7, y: 1.75, w: W - 1.4, h: 2.0 }
     : {
         x: 0.7,
         y: 1.75,
@@ -542,6 +560,10 @@ function academicNumbered(slide: pptxgen.Slide, t: Style, bullets: string[], reg
   const gap = 0.18;
   const n = bullets.length;
   const blockH = (region.h - gap * (n - 1)) / n;
+  // Единый кегль на все блоки — иначе каждый тезис своего размера (жалоба Юленьки).
+  const uniform = Math.min(
+    ...bullets.map((b) => fitBodyFontSize([b], region.w - 1.2, blockH, t.bodyFont.size))
+  );
   bullets.forEach((b, i) => {
     const y = region.y + i * (blockH + gap);
     slide.addShape("rect", {
@@ -568,7 +590,7 @@ function academicNumbered(slide: pptxgen.Slide, t: Style, bullets: string[], reg
       y,
       w: region.w - 0.9,
       h: blockH,
-      fontSize: fitBodyFontSize([b], region.w - 1.2, blockH, t.bodyFont.size),
+      fontSize: uniform,
       color: t.text,
       fontFace: t.bodyFont.face,
       align: "left",
@@ -587,6 +609,10 @@ function academicTwoColumns(slide: pptxgen.Slide, t: Style, bullets: string[], r
   const rows = Math.max(cols[0].length, cols[1].length, 1);
   const rowGap = 0.2;
   const boxH = (region.h - rowGap * (rows - 1)) / rows;
+  // Единый кегль на все боксы — консистентный размер тезисов.
+  const uniform = Math.min(
+    ...bullets.map((b) => fitBodyFontSize([b], colW - 0.5, boxH - 0.2, t.bodyFont.size))
+  );
   cols.forEach((col, ci) => {
     const x = region.x + ci * (colW + colGap);
     col.forEach((b, ri) => {
@@ -597,7 +623,7 @@ function academicTwoColumns(slide: pptxgen.Slide, t: Style, bullets: string[], r
         y: y + 0.1,
         w: colW - 0.36,
         h: boxH - 0.2,
-        fontSize: fitBodyFontSize([b], colW - 0.5, boxH - 0.2, t.bodyFont.size),
+        fontSize: uniform,
         color: t.text,
         fontFace: t.bodyFont.face,
         align: "left",
@@ -637,10 +663,12 @@ function academicFramed(slide: pptxgen.Slide, t: Style, bullets: string[], regio
 
 // Широкий визуал (LR-диаграммы) в боковом регионе съёживается в марку —
 // уводим его вниз на всю ширину слайда.
-const WIDE_ASPECT = 2.0;
+const WIDE_ASPECT = 1.5;
 
 function visualRegion(hasBullets: boolean, bottom: boolean): Box {
-  if (bottom) return { x: 0.7, y: 4.65, w: W - 1.4, h: 2.25 };
+  // Полоса под визуал шире и ВЫШЕ (h 2.95 вместо 2.25): схемы на защите читаемы
+  // с расстояния. Текстовые регионы обязаны заканчиваться выше y=4.05.
+  if (bottom) return { x: 0.7, y: 4.05, w: W - 1.4, h: 2.95 };
   return {
     x: hasBullets ? 7.2 : 2.0,
     y: 1.85,
@@ -755,8 +783,11 @@ export async function buildPptx(
     const image = s.layout === "content" ? slideImages?.get(index + 1) : undefined;
     const resolvedPath = image ? resolveSlideImagePath(image.path) : null;
     // AI-визуал только если на этот слайд нет загрузки пользователя
-    const aiVisual =
+    let aiVisual =
       s.layout === "content" && !resolvedPath ? aiVisuals?.get(index + 1) : undefined;
+    // Academic = русская работа: сгенерированная иллюстрация (kind "image") пишет
+    // английский/мусор на кириллице — выкидываем (chart/photo остаются). Жалоба Юленьки.
+    if (spec.academic && aiVisual?.kind === "image") aiVisual = undefined;
     const bullets = s.bullets.filter((b) => b.trim().length > 0);
     const hasBullets = bullets.length > 0;
     const hasImage = Boolean(resolvedPath) || Boolean(aiVisual);

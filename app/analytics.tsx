@@ -7,6 +7,14 @@ export function Analytics() {
   if (process.env.NODE_ENV !== "production") return null;
   return (
     <>
+      {/* Cookiebot — consent management, must load before trackers */}
+      <Script
+        id="Cookiebot"
+        src="https://consent.cookiebot.com/uc.js"
+        data-cbid="c8db668b-a830-43e4-bcd8-62e78b202013"
+        strategy="beforeInteractive"
+      />
+
       {/* Yandex.Metrika */}
       <Script id="yandex-metrika" strategy="afterInteractive">
         {`(function(m,e,t,r,i,k,a){

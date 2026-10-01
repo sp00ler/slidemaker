@@ -1,4 +1,5 @@
 import type { Deck, Visual } from "@/lib/anthropic";
+import { deflateSync } from "node:zlib";
 
 // Исполняющий слой визуалов из spec модели:
 //  - diagram  → Mermaid через kroki.io (без локального chromium)
@@ -9,7 +10,13 @@ import type { Deck, Visual } from "@/lib/anthropic";
 // Приоритет на стороне pptx: загрузка пользователя важнее AI-визуала.
 
 export type ResolvedVisual =
-  | { kind: "image"; data: string; alt: string; caption: string } // data = data:URL base64
+  | {
+      kind: "image";
+      data: string;
+      alt: string;
+      caption: string;
+      sourceType?: "photo" | "diagram" | "image";
+    } // data = data:URL base64
   | {
       kind: "chart";
       chart: NonNullable<Visual["chart"]>;
@@ -18,13 +25,15 @@ export type ResolvedVisual =
     };
 
 const FETCH_TIMEOUT_MS = 8000;
+const MERMAID_TIMEOUT_MS = 20_000; // Allow time for Kroki's cold render.
 
 async function fetchWithTimeout(
   url: string,
-  init?: RequestInit
+  init?: RequestInit,
+  timeoutMs = FETCH_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -37,20 +46,69 @@ async function bufferToDataUrl(res: Response, mime: string): Promise<string> {
   return `data:${mime};base64,${buf.toString("base64")}`;
 }
 
-async function mermaidToImage(v: Visual): Promise<ResolvedVisual | null> {
+async function fetchPngDataUrl(url: string, init?: RequestInit): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MERMAID_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildMermaidSource(v: Visual, accent?: string): string {
+  const color =
+    accent && /^#?[0-9a-fA-F]{6}$/.test(accent.trim())
+      ? `#${accent.trim().replace(/^#/, "")}`
+      : "#1F3A5F";
+  const init = {
+    theme: "base",
+    fontFamily: "Arial",
+    themeVariables: {
+      primaryColor: "#F7F8FA",
+      primaryBorderColor: color,
+      primaryTextColor: "#1A1A1A",
+      lineColor: color,
+      fontFamily: "Arial",
+      fontSize: "22px",
+    },
+  };
+  return `%%{init: ${JSON.stringify(init)}}%%\n${v.mermaid}`;
+}
+
+async function mermaidToImage(v: Visual, accent?: string): Promise<ResolvedVisual | null> {
   if (!v.mermaid.trim()) return null;
-  const res = await fetchWithTimeout("https://kroki.io/mermaid/png", {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: v.mermaid,
-  });
-  if (!res.ok) return null;
-  return {
+  const code = buildMermaidSource(v, accent);
+  const makeImage = (data: string): ResolvedVisual => ({
     kind: "image",
-    data: await bufferToDataUrl(res, "image/png"),
+    data,
     alt: v.alt,
     caption: v.caption,
-  };
+    sourceType: "diagram",
+  });
+
+  try {
+    const data = await fetchPngDataUrl("https://kroki.io/mermaid/png", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: code,
+    });
+    if (data) return makeImage(data);
+  } catch {
+    // Try the secondary renderer after transport, status, or body-read failure.
+  }
+
+  const payload = JSON.stringify({ code, mermaid: { theme: "base" } });
+  const encoded = deflateSync(Buffer.from(payload, "utf8")).toString("base64url");
+  try {
+    const data = await fetchPngDataUrl(`https://mermaid.ink/img/pako:${encoded}?type=png`);
+    return data ? makeImage(data) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function photoToImage(v: Visual): Promise<ResolvedVisual | null> {
@@ -77,6 +135,7 @@ async function photoToImage(v: Visual): Promise<ResolvedVisual | null> {
     data: await bufferToDataUrl(img, "image/jpeg"),
     alt: v.alt,
     caption: v.caption,
+    sourceType: "photo",
   };
 }
 
@@ -126,6 +185,7 @@ async function generatedImage(v: Visual, accent?: string): Promise<ResolvedVisua
       data: `data:image/png;base64,${b64}`,
       alt: v.alt,
       caption: v.caption,
+      sourceType: "image",
     };
   } finally {
     clearTimeout(timer);
@@ -135,7 +195,7 @@ async function generatedImage(v: Visual, accent?: string): Promise<ResolvedVisua
 export async function resolveVisual(v: Visual, accent?: string): Promise<ResolvedVisual | null> {
   switch (v.type) {
     case "diagram":
-      return mermaidToImage(v);
+      return mermaidToImage(v, accent);
     case "chart":
       return v.chart && v.chart.data.length > 0
         ? { kind: "chart", chart: v.chart, alt: v.alt, caption: v.caption }
@@ -147,6 +207,10 @@ export async function resolveVisual(v: Visual, accent?: string): Promise<Resolve
     default:
       return null;
   }
+}
+
+export function isAllowedAcademicVisual(visual: ResolvedVisual): boolean {
+  return visual.kind !== "image" || visual.sourceType !== "image";
 }
 
 // Резолвит визуалы для content-слайдов параллельно. Любая ошибка/таймаут

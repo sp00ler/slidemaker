@@ -254,6 +254,7 @@ export async function processOrder(order: OrderRow): Promise<void> {
         deck1 = await generateDeck(genParams);
         break;
       } catch (e) {
+        if (e instanceof Error && e.name === "DeckQualityError") throw e;
         if (attempt === 2) throw e;
         console.warn("order generation retry:", {
           orderId: order.id,
@@ -269,12 +270,38 @@ export async function processOrder(order: OrderRow): Promise<void> {
       buildSourceSlideMap(deck1, source.extractedPaths),
       slideImages
     );
+    const aiVisuals = await safeVisuals(deck1);
+    const academic = design?.preset === "academic";
+    const eligibleContentSlides = deck1.slides.flatMap((slide, index) => {
+      if (slide.layout !== "content") return [];
+      const generatedImage = slide.visual.type === "image";
+      const requestedVisual =
+        slide.visual.type === "photo" ||
+        slide.visual.type === "diagram" ||
+        slide.visual.type === "chart" ||
+        (generatedImage && !academic);
+      return requestedVisual ? [{ slideNumber: index + 1 }] : [];
+    });
+    const missingVisualSlides = eligibleContentSlides
+      .filter(({ slideNumber }) => {
+        const visual = aiVisuals?.get(slideNumber);
+        const hasResolvedVisual =
+          !!visual &&
+          (!academic || visual.kind !== "image" || visual.sourceType !== "image");
+        return !hasResolvedVisual && !images1.has(slideNumber);
+      })
+      .map(({ slideNumber }) => slideNumber);
+    if (missingVisualSlides.length > 0) {
+      throw new Error(
+        `Не удалось подготовить визуалы для слайдов ${missingVisualSlides.join(", ")}. Попробуйте повторить генерацию.`
+      );
+    }
     await buildPptx(
       deck1,
       order.style,
       outPath,
       images1,
-      await safeVisuals(deck1),
+      aiVisuals,
       design,
       titleImage ?? undefined
     );

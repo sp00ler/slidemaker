@@ -55,6 +55,7 @@ type GenerateModule = {
     status: string;
     file_path: string | null;
     created_at: string;
+    prefs?: { preset?: string };
   }) => Promise<void>;
 };
 
@@ -231,14 +232,34 @@ async function loadCheckoutRoute(
   return { mod: requireFromTest(routePath), calls };
 }
 
-async function loadGenerateManual(): Promise<{
-  mod: GenerateModule;
-  calls: { markAwaitingManual: string[]; generateDeck: unknown[]; mailer: string[] };
-}> {
+type GenerateCalls = {
+  markAwaitingManual: string[];
+  markDone: string[];
+  markError: string[];
+  generateDeck: unknown[];
+  buildPptx: unknown[];
+  mailer: string[];
+  deckEmail: unknown[];
+};
+
+type GenerateTestConfig = {
+  deck?: unknown;
+  generateErrors?: { name: string; message: string }[];
+  resolvedVisuals?: [number, unknown][];
+  uploadedFiles?: { slide_number: number; stored_path: string; description: string | null }[];
+};
+
+async function loadGenerateTest(
+  config: GenerateTestConfig = {}
+): Promise<{ mod: GenerateModule; calls: GenerateCalls }> {
   const calls = {
     markAwaitingManual: [] as string[],
+    markDone: [] as string[],
+    markError: [] as string[],
     generateDeck: [] as unknown[],
+    buildPptx: [] as unknown[],
     mailer: [] as string[],
+    deckEmail: [] as unknown[],
   };
   activeRuntimeDir = path.join(testOutDir, `runtime-generate-${Date.now()}-${Math.random()}`);
   const ordersPath = path.join(activeRuntimeDir, "lib", "orders.js");
@@ -254,26 +275,34 @@ async function loadGenerateManual(): Promise<{
   await fs.writeFile(
     ordersPath,
     `exports.markAwaitingManual = async (id) => global.__generateCalls.markAwaitingManual.push(id);
-     exports.markDone = async () => {};
-     exports.markError = async () => {};`
+     exports.getOrderFiles = async () => global.__generateConfig.uploadedFiles || [];
+     exports.getOrderSource = async () => null;
+     exports.getOrderTitleImage = async () => null;
+     exports.markDone = async (id) => global.__generateCalls.markDone.push(id);
+     exports.markError = async (id) => global.__generateCalls.markError.push(id);`
   );
   await fs.writeFile(
     anthropicPath,
-    `exports.generateDeck = async (data) => global.__generateCalls.generateDeck.push(data);`
+    `exports.generateDeck = async (data) => {
+      global.__generateCalls.generateDeck.push(data);
+      const error = global.__generateConfig.generateErrors?.shift();
+      if (error) { const e = new Error(error.message); e.name = error.name; throw e; }
+      return global.__generateConfig.deck;
+    };`
   );
   await fs.writeFile(
     pptxPath,
-    `exports.buildPptx = async () => {};`
+    `exports.buildPptx = async (...args) => global.__generateCalls.buildPptx.push(args);`
   );
   await fs.writeFile(
     visualsPath,
-    `exports.resolveDeckVisuals = async () => new Map();`
+    `exports.resolveDeckVisuals = async () => new Map(global.__generateConfig.resolvedVisuals || []);`
   );
   await fs.writeFile(
     mailerPath,
     `exports.sendAuthorCustomerEmail = async () => global.__generateCalls.mailer.push("customer");
      exports.sendAdminOrderEmail = async () => global.__generateCalls.mailer.push("admin");
-     exports.sendDeckEmail = async () => {};`
+     exports.sendDeckEmail = async (...args) => global.__generateCalls.deckEmail.push(args);`
   );
   await fs.writeFile(
     envPath,
@@ -306,12 +335,20 @@ async function loadGenerateManual(): Promise<{
     delete require.cache[stubPath];
   }
   (globalThis as unknown as { __generateCalls: typeof calls }).__generateCalls = calls;
+  (globalThis as unknown as { __generateConfig: GenerateTestConfig }).__generateConfig = config;
 
   const generatePath = path.join(activeRuntimeDir, "lib", "generate.js");
   await transpileSource(path.join(process.cwd(), "lib", "generate.ts"), generatePath);
   delete require.cache[generatePath];
 
   return { mod: requireFromTest(generatePath), calls };
+}
+
+async function loadGenerateManual(): Promise<{
+  mod: GenerateModule;
+  calls: GenerateCalls;
+}> {
+  return loadGenerateTest();
 }
 
 test("checkout optional text validator rejects oversized values", async () => {
@@ -537,4 +574,131 @@ test("processOrder author skips generation and sends manual emails", async () =>
   assert.deepEqual(calls.markAwaitingManual, ["order-id"]);
   assert.deepEqual(calls.generateDeck, []);
   assert.deepEqual(calls.mailer, ["customer", "admin"]);
+});
+
+function contentDeck(types: string[]) {
+  return {
+    title: "Test deck",
+    subtitle: "",
+    slides: types.map((type) => ({
+      layout: "content",
+      heading: "Content",
+      subheading: "",
+      bullets: ["A useful point"],
+      visual: {
+        type,
+        search_query: "test photo",
+        image_prompt: "test image",
+        mermaid: "graph TD; A-->B",
+        chart: null,
+        caption: "",
+        alt: "",
+      },
+      source_image: -1,
+    })),
+  };
+}
+
+function regularOrder() {
+  return {
+    id: "order-id",
+    email: "user@example.com",
+    tariff: "basic",
+    slide_count: 2,
+    topic: "Topic",
+    wishes: null,
+    storyboard: null,
+    style: "minimal",
+    status: "generating",
+    file_path: null,
+    created_at: "2026-06-20T00:00:00.000Z",
+  };
+}
+
+test("processOrder marks error and skips delivery when all requested visuals disappear", async () => {
+  const { mod, calls } = await loadGenerateTest({
+    deck: contentDeck(["photo", "diagram"]),
+  });
+
+  await mod.processOrder(regularOrder());
+
+  assert.deepEqual(calls.markError, ["order-id"]);
+  assert.deepEqual(calls.markDone, []);
+  assert.deepEqual(calls.buildPptx, []);
+  assert.deepEqual(calls.deckEmail, []);
+});
+
+test("processOrder delivers when an uploaded content visual survives", async () => {
+  const { mod, calls } = await loadGenerateTest({
+    deck: contentDeck(["photo", "diagram"]),
+    resolvedVisuals: [
+      [1, { kind: "image", sourceType: "photo", data: "data:image/jpeg;base64,AA==", alt: "", caption: "" }],
+    ],
+    uploadedFiles: [
+      { slide_number: 2, stored_path: "uploads/order/slide.png", description: "source" },
+    ],
+  });
+
+  await mod.processOrder(regularOrder());
+
+  assert.deepEqual(calls.markError, []);
+  assert.deepEqual(calls.markDone, ["order-id"]);
+  assert.equal(calls.buildPptx.length, 1);
+  assert.equal(calls.deckEmail.length, 1);
+});
+
+test("processOrder fails when one requested visual survives but another slide is missing", async () => {
+  const { mod, calls } = await loadGenerateTest({
+    deck: contentDeck(["photo", "diagram"]),
+    resolvedVisuals: [
+      [1, { kind: "image", sourceType: "photo", data: "data:image/jpeg;base64,AA==", alt: "", caption: "" }],
+    ],
+  });
+
+  await mod.processOrder(regularOrder());
+
+  assert.deepEqual(calls.markError, ["order-id"]);
+  assert.deepEqual(calls.markDone, []);
+  assert.deepEqual(calls.buildPptx, []);
+  assert.deepEqual(calls.deckEmail, []);
+});
+
+test("processOrder allows an intentionally text-only content deck", async () => {
+  const { mod, calls } = await loadGenerateTest({ deck: contentDeck(["none"]) });
+
+  await mod.processOrder(regularOrder());
+
+  assert.deepEqual(calls.markError, []);
+  assert.deepEqual(calls.markDone, ["order-id"]);
+  assert.equal(calls.buildPptx.length, 1);
+  assert.equal(calls.deckEmail.length, 1);
+});
+
+test("processOrder ignores generated images when checking academic visual delivery", async () => {
+  const { mod, calls } = await loadGenerateTest({
+    deck: contentDeck(["photo", "image"]),
+    resolvedVisuals: [
+      [2, { kind: "image", sourceType: "image", data: "data:image/png;base64,AA==", alt: "", caption: "" }],
+    ],
+  });
+
+  await mod.processOrder({ ...regularOrder(), prefs: { preset: "academic" } });
+
+  assert.deepEqual(calls.markError, ["order-id"]);
+  assert.deepEqual(calls.markDone, []);
+  assert.deepEqual(calls.buildPptx, []);
+  assert.deepEqual(calls.deckEmail, []);
+});
+
+test("processOrder does not retry a DeckQualityError", async () => {
+  const { mod, calls } = await loadGenerateTest({
+    generateErrors: [{ name: "DeckQualityError", message: "quality failed" }],
+  });
+
+  await mod.processOrder(regularOrder());
+
+  assert.equal(calls.generateDeck.length, 1);
+  assert.deepEqual(calls.markError, ["order-id"]);
+  assert.deepEqual(calls.markDone, []);
+  assert.deepEqual(calls.deckEmail, []);
 });
